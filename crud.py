@@ -1,16 +1,15 @@
 from sqlalchemy.orm import Session
-import models, schemas
-from auth import get_password_hash, verify_password, generate_unique_affiliate_link
-from datetime import datetime
-import os
-from dotenv import load_dotenv
 from typing import Optional
+from datetime import datetime
 
-load_dotenv()
+import models
+import schemas
+from auth_utils import get_password_hash, verify_password, generate_unique_affiliate_link
+from config import settings
 
 def initialize_system(db: Session):
     """Initialize system with admin link configuration"""
-    admin_link = os.getenv("ADMIN_REGISTRATION_LINK", "ADMIN-SECURE-LINK-2024")
+    admin_link = settings.ADMIN_REGISTRATION_LINK
     
     # Check if config exists
     config = db.query(models.SystemConfig).first()
@@ -23,8 +22,8 @@ def initialize_system(db: Session):
         db.refresh(config)
     
     # Initialize admin user if specified in env
-    admin_email = os.getenv("ADMIN_EMAIL")
-    admin_password = os.getenv("ADMIN_PASSWORD")
+    admin_email = settings.ADMIN_EMAIL
+    admin_password = settings.ADMIN_PASSWORD
     
     if admin_email and admin_password:
         create_admin_user(db, admin_email, admin_password)
@@ -51,7 +50,7 @@ def get_admin_registration_link(db: Session):
     config = db.query(models.SystemConfig).first()
     if config:
         return config.admin_registration_link
-    return os.getenv("ADMIN_REGISTRATION_LINK", "ADMIN-SECURE-LINK-2024")
+    return settings.ADMIN_REGISTRATION_LINK
 
 def verify_registration_link(db: Session, link_code: str):
     """Verify if the provided link is the valid admin registration link"""
