@@ -1,18 +1,29 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
 from config import settings
+import models
+from urllib.parse import urlparse
 
-SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+# MongoDB connection
+client = AsyncIOMotorClient(settings.DATABASE_URL)
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Extract database name from connection string
+parsed_url = urlparse(settings.DATABASE_URL)
+database_name = parsed_url.path[1:] if parsed_url.path and len(parsed_url.path) > 1 else "affiliate_db"
+database = client[database_name]
 
-Base = declarative_base()
+async def init_db():
+    """Initialize MongoDB database connection and Beanie ODM"""
+    await init_beanie(
+        database=database,
+        document_models=[
+            models.User,
+            models.AffiliateRequest,
+            models.Affiliate,
+            models.SystemConfig
+        ]
+    )
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def get_database():
+    """Get database instance for dependency injection"""
+    return database

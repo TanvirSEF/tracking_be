@@ -15,7 +15,7 @@ class UserCreate(UserBase):
     password: str
 
 class User(UserBase):
-    id: int
+    id: str
     is_admin: bool
     is_active: bool
     created_at: datetime
@@ -37,7 +37,7 @@ class AffiliateRequestCreate(BaseModel):
         return v.strip()
 
 class AffiliateRequestResponse(BaseModel):
-    id: int
+    id: str
     name: str
     email: str
     location: str
@@ -52,7 +52,7 @@ class AffiliateRequestResponse(BaseModel):
         from_attributes = True
 
 class AffiliateResponse(BaseModel):
-    id: int
+    id: str
     name: str
     email: str
     location: str
@@ -75,7 +75,7 @@ class LoginForm(BaseModel):
     password: str
 
 class ApprovalRequest(BaseModel):
-    request_id: int
+    request_id: str
     approve: bool
     reason: Optional[str] = None
 

@@ -1,19 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from datetime import timedelta
 
 import schemas
 import crud
 import auth_utils as auth
-from database import get_db
 
 router = APIRouter()
 
 
 @router.post("/login", response_model=schemas.Token)
-def login(form_data: schemas.LoginForm, db: Session = Depends(get_db)):
+async def login(form_data: schemas.LoginForm):
     """Login endpoint for admin and affiliates"""
-    user = crud.authenticate_user(db, form_data.email, form_data.password)
+    user = await crud.authenticate_user(form_data.email, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
