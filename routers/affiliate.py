@@ -48,7 +48,7 @@ async def get_affiliate_profile(
             detail="Admin users don't have affiliate profiles"
         )
     
-    affiliate = await crud.get_affiliate_by_user(str(current_user.id))
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
     if not affiliate:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

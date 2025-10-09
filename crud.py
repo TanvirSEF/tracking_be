@@ -5,6 +5,7 @@ import models
 import schemas
 from auth_utils import get_password_hash, verify_password, generate_unique_affiliate_link
 from config import settings
+from beanie import PydanticObjectId
 
 async def initialize_system():
     """Initialize system with admin link configuration"""
@@ -109,7 +110,7 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
     
     # Create affiliate profile with unique link
     affiliate = models.Affiliate(
-        user_id=str(user.id),
+        user_id=user.id,
         name=request.name,
         location=request.location,
         language=request.language,
@@ -147,7 +148,7 @@ async def authenticate_user(email: str, password: str):
         return None
     return user
 
-async def get_affiliate_by_user(user_id: str):
+async def get_affiliate_by_user(user_id: PydanticObjectId):
     """Get affiliate profile by user ID"""
     return await models.Affiliate.find_one(models.Affiliate.user_id == user_id)
 

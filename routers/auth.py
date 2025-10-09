@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import timedelta
+from fastapi.security import OAuth2PasswordRequestForm
 
 import schemas
 import crud
@@ -9,9 +10,10 @@ router = APIRouter()
 
 
 @router.post("/login", response_model=schemas.Token)
-async def login(form_data: schemas.LoginForm):
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login endpoint for admin and affiliates"""
-    user = await crud.authenticate_user(form_data.email, form_data.password)
+    # OAuth2PasswordRequestForm uses 'username' field; we treat it as email
+    user = await crud.authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

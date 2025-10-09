@@ -1,4 +1,4 @@
-from beanie import Document
+from beanie import Document, PydanticObjectId
 from pydantic import Field
 from typing import Optional
 from datetime import datetime
@@ -36,7 +36,7 @@ class AffiliateRequest(Document):
         name = "affiliate_requests"
 
 class Affiliate(Document):
-    user_id: str = Field(..., unique=True, index=True)
+    user_id: PydanticObjectId = Field(..., unique=True, index=True)
     name: str
     location: str
     language: str
