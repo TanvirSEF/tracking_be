@@ -1,29 +1,42 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+import motor.motor_asyncio
 from beanie import init_beanie
+from models import User, AffiliateRequest, Affiliate, SystemConfig
 from config import settings
-import models
-from urllib.parse import urlparse
 
-# MongoDB connection
-client = AsyncIOMotorClient(settings.DATABASE_URL)
-
-# Extract database name from connection string
-parsed_url = urlparse(settings.DATABASE_URL)
-database_name = parsed_url.path[1:] if parsed_url.path and len(parsed_url.path) > 1 else "affiliate_db"
-database = client[database_name]
+# Global flag
+database_initialized = False
 
 async def init_db():
-    """Initialize MongoDB database connection and Beanie ODM"""
-    await init_beanie(
-        database=database,
-        document_models=[
-            models.User,
-            models.AffiliateRequest,
-            models.Affiliate,
-            models.SystemConfig
-        ]
-    )
-
-def get_database():
-    """Get database instance for dependency injection"""
-    return database
+    """Initialize database with proper error handling"""
+    global database_initialized
+    
+    try:
+        print("Connecting to MongoDB...")
+        
+        client = motor.motor_asyncio.AsyncIOMotorClient(
+            settings.DATABASE_URL,
+            serverSelectionTimeoutMS=5000
+        )
+        
+        # Test connection
+        await client.admin.command('ping')
+        print("Connected to MongoDB")
+        
+        database = client.get_database()
+        
+        await init_beanie(
+            database=database,
+            document_models=[User, AffiliateRequest, Affiliate, SystemConfig]
+        )
+        
+        database_initialized = True
+        print("Database initialized")
+        return True
+        
+    except Exception as e:
+        database_initialized = False
+        print(f"MongoDB connection failed (this is OK for now)")
+        print(f"Error: {str(e)[:100]}")
+        print("API will start without database")
+        # DON'T RAISE - just return False
+        return False

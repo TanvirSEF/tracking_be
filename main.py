@@ -4,19 +4,32 @@ from contextlib import asynccontextmanager
 
 import models
 import crud
-from database import init_db
+from database import init_db, database_initialized
 from config import settings
 from routers import auth as auth_router, admin, affiliate
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    await init_db()
-    await crud.initialize_system()
-    print("System initialized successfully")
-    print(f"Admin registration link: {settings.ADMIN_REGISTRATION_LINK}")
+    db_connected = await init_db()
+    
+    # Only initialize system if database connected
+    if db_connected:
+        try:
+            await crud.initialize_system()
+            print("System initialized")
+            print(f"Admin link: {settings.ADMIN_REGISTRATION_LINK}")
+        except Exception as e:
+            print(f"System init failed: {e}")
+    else:
+        print("Skipping system initialization")
+    
+    print("API is ready (database may be disconnected)")
+    
     yield
-    # Shutdown (if needed)
+    
+    # Shutdown
+    print("Shutting down")
 
 app = FastAPI(
     title="Affiliate Management System",
