@@ -39,14 +39,16 @@ app = FastAPI(
 )
 
 # Add CORS middleware (configurable)
+# Parse and validate CORS origins; if wildcard, disable credentials for safety
 allowed_origins = (
     ["*"] if settings.CORS_ORIGINS.strip() == "*"
     else [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 )
+allow_credentials = False if allowed_origins == ["*"] else True
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -68,7 +70,10 @@ def read_root():
 # Health check
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "database": "mongodb"}
+    return {
+        "status": "healthy",
+        "database": "connected" if database_initialized else "disconnected"
+    }
 
 if __name__ == "__main__":
     import uvicorn

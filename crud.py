@@ -6,6 +6,7 @@ import schemas
 from auth_utils import get_password_hash, verify_password, generate_unique_affiliate_link
 from config import settings
 from beanie import PydanticObjectId
+from typing import Optional
 
 async def initialize_system():
     """Initialize system with admin link configuration"""
@@ -71,7 +72,7 @@ async def create_affiliate_request(request: schemas.AffiliateRequestCreate):
     affiliate_request = models.AffiliateRequest(
         name=request.name,
         email=request.email,
-        password=hashed_password,
+        hashed_password=hashed_password,
         location=request.location,
         language=request.language,
         onemove_link=request.onemove_link,
@@ -86,12 +87,24 @@ async def get_pending_requests():
         models.AffiliateRequest.status == models.RequestStatus.PENDING
     ).sort("-created_at").to_list()
 
-async def get_all_requests(status: Optional[models.RequestStatus] = None):
-    """Get all affiliate requests, optionally filtered by status"""
+async def get_all_requests(
+    status: Optional[models.RequestStatus] = None,
+    page: int = 1,
+    page_size: int = 20,
+):
+    """Get all affiliate requests, optionally filtered by status, paginated"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+
+    skip = (page - 1) * page_size
     query = models.AffiliateRequest.find()
     if status:
         query = query.find(models.AffiliateRequest.status == status)
-    return await query.sort("-created_at").to_list()
+    return await query.sort("-created_at").skip(skip).limit(page_size).to_list()
 
 async def approve_affiliate_request(request_id: str, admin_id: str):
     """Approve an affiliate request and create their account"""
@@ -103,12 +116,25 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
     # Create user account
     user = models.User(
         email=request.email,
-        hashed_password=request.password,
+        hashed_password=request.hashed_password,
         is_admin=False
     )
     await user.insert()
     
     # Create affiliate profile with unique link
+    # Ensure unique_link collision retry before insert
+    max_attempts = 5
+    unique_link = None
+    for _ in range(max_attempts):
+        candidate = generate_unique_affiliate_link()
+        existing = await models.Affiliate.find_one(models.Affiliate.unique_link == candidate)
+        if not existing:
+            unique_link = candidate
+            break
+    if unique_link is None:
+        # Fallback last attempt
+        unique_link = generate_unique_affiliate_link()
+
     affiliate = models.Affiliate(
         user_id=user.id,
         name=request.name,
@@ -116,7 +142,7 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
         language=request.language,
         onemove_link=request.onemove_link,
         puprime_link=request.puprime_link,
-        unique_link=generate_unique_affiliate_link()
+        unique_link=unique_link
     )
     await affiliate.insert()
     
@@ -152,9 +178,17 @@ async def get_affiliate_by_user(user_id: PydanticObjectId):
     """Get affiliate profile by user ID"""
     return await models.Affiliate.find_one(models.Affiliate.user_id == user_id)
 
-async def get_all_affiliates():
-    """Get all approved affiliates"""
-    affiliates = await models.Affiliate.find().sort("-created_at").to_list()
+async def get_all_affiliates(page: int = 1, page_size: int = 20):
+    """Get all approved affiliates (paginated)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+
+    affiliates = await models.Affiliate.find().sort("-created_at").skip(skip).limit(page_size).to_list()
     result = []
     for affiliate in affiliates:
         user = await models.User.find_one(models.User.id == affiliate.user_id)
