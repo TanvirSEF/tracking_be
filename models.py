@@ -22,7 +22,7 @@ class User(Document):
 class AffiliateRequest(Document):
     name: str
     email: str = Field(..., unique=True, index=True)
-    password: str
+    hashed_password: str
     location: str
     language: str
     onemove_link: str

@@ -9,6 +9,9 @@ import string
 
 from config import settings
 import models
+from datetime import datetime, timedelta
+from collections import defaultdict, deque
+from typing import Deque, Dict
 
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
@@ -21,6 +24,28 @@ pwd_context = CryptContext(
     deprecated="auto"
 )
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+# Simple in-memory login attempt tracking (per-process best-effort)
+_login_attempts: Dict[str, Deque[datetime]] = defaultdict(deque)
+_LOCKOUT_WINDOW_SECONDS = 300  # 5 minutes
+_MAX_ATTEMPTS = 10
+
+def _prune_attempts(identifier: str) -> None:
+    window_start = datetime.utcnow() - timedelta(seconds=_LOCKOUT_WINDOW_SECONDS)
+    attempts = _login_attempts[identifier]
+    while attempts and attempts[0] < window_start:
+        attempts.popleft()
+
+def is_login_allowed(identifier: str) -> bool:
+    _prune_attempts(identifier)
+    return len(_login_attempts[identifier]) < _MAX_ATTEMPTS
+
+def register_login_failure(identifier: str) -> None:
+    _prune_attempts(identifier)
+    _login_attempts[identifier].append(datetime.utcnow())
+
+def register_login_success(identifier: str) -> None:
+    _login_attempts.pop(identifier, None)
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)

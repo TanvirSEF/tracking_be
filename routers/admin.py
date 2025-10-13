@@ -36,6 +36,8 @@ async def get_pending_requests(
 @router.get("/all-requests", response_model=List[schemas.AffiliateRequestResponse])
 async def get_all_requests(
     status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
     current_user: models.User = Depends(auth.get_admin_user)
 ):
     """Get all affiliate requests, optionally filtered by status"""
@@ -49,7 +51,7 @@ async def get_all_requests(
                 detail=f"Invalid status. Must be one of: {[s.value for s in models.RequestStatus]}"
             )
     
-    return await crud.get_all_requests(status_enum)
+    return await crud.get_all_requests(status_enum, page=page, page_size=page_size)
 
 
 @router.post("/review-request")
@@ -90,10 +92,12 @@ async def review_affiliate_request(
 
 @router.get("/affiliates", response_model=List[schemas.AffiliateResponse])
 async def get_all_affiliates(
+    page: int = 1,
+    page_size: int = 20,
     current_user: models.User = Depends(auth.get_admin_user)
 ):
     """Get all approved affiliates"""
-    affiliates = await crud.get_all_affiliates()
+    affiliates = await crud.get_all_affiliates(page=page, page_size=page_size)
     result = []
     for affiliate in affiliates:
         user = await models.User.find_one(models.User.id == affiliate.user_id)
