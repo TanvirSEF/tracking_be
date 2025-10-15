@@ -7,7 +7,6 @@ from auth_utils import get_password_hash, verify_password, generate_unique_affil
 from config import settings
 from beanie import PydanticObjectId
 from typing import Optional
-from email_service import EmailService
 
 async def initialize_system():
     """Initialize system with admin link configuration"""
@@ -337,73 +336,3 @@ async def get_referral_count_by_affiliate(affiliate_id: str):
     """Get total count of referrals for a specific affiliate"""
     from beanie import PydanticObjectId
     return await models.Referral.find(models.Referral.affiliate_id == PydanticObjectId(affiliate_id)).count()
-
-# Email verification functions
-async def send_verification_code(email: str) -> bool:
-    """Send verification code to email"""
-    # Check if email is already verified
-    existing_verification = await models.EmailVerification.find_one(
-        models.EmailVerification.email == email,
-        models.EmailVerification.is_verified == True
-    )
-    
-    if existing_verification:
-        return False  # Email already verified
-    
-    # Generate verification code
-    verification_code = EmailService.generate_verification_code()
-    expires_at = EmailService.get_verification_expiry()
-    
-    # Delete any existing unverified codes for this email
-    await models.EmailVerification.find(
-        models.EmailVerification.email == email,
-        models.EmailVerification.is_verified == False
-    ).delete()
-    
-    # Create new verification record
-    verification = models.EmailVerification(
-        email=email,
-        verification_code=verification_code,
-        expires_at=expires_at
-    )
-    await verification.insert()
-    
-    # Send email
-    return await EmailService.send_verification_email(email, verification_code)
-
-async def verify_email_code(email: str, verification_code: str) -> bool:
-    """Verify email with verification code"""
-    # Find verification record
-    verification = await models.EmailVerification.find_one(
-        models.EmailVerification.email == email,
-        models.EmailVerification.verification_code == verification_code,
-        models.EmailVerification.is_verified == False
-    )
-    
-    if not verification:
-        return False
-    
-    # Check if code is expired
-    if datetime.utcnow() > verification.expires_at:
-        return False
-    
-    # Mark as verified
-    verification.is_verified = True
-    verification.verified_at = datetime.utcnow()
-    await verification.save()
-    
-    # Update user email verification status if user exists
-    user = await models.User.find_one(models.User.email == email)
-    if user:
-        user.is_email_verified = True
-        await user.save()
-    
-    return True
-
-async def is_email_verified(email: str) -> bool:
-    """Check if email is verified"""
-    verification = await models.EmailVerification.find_one(
-        models.EmailVerification.email == email,
-        models.EmailVerification.is_verified == True
-    )
-    return verification is not None
