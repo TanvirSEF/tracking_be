@@ -82,3 +82,18 @@ class ApprovalRequest(BaseModel):
 class AdminRegistrationLinkResponse(BaseModel):
     registration_link: str
     full_url: str
+
+class EmailVerificationRequest(BaseModel):
+    email: EmailStr
+
+class EmailVerificationCode(BaseModel):
+    email: EmailStr
+    verification_code: str = Field(..., min_length=6, max_length=6)
+
+class EmailVerificationResponse(BaseModel):
+    message: str
+    email: str
+    expires_at: datetime
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr

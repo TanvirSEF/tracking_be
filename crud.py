@@ -1,12 +1,14 @@
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
+import secrets
+import string
 
 import models
 import schemas
 from auth_utils import get_password_hash, verify_password, generate_unique_affiliate_link
 from config import settings
 from beanie import PydanticObjectId
-from typing import Optional
+from email_service import email_service
 
 async def initialize_system():
     """Initialize system with admin link configuration"""
@@ -66,6 +68,10 @@ async def create_affiliate_request(request: schemas.AffiliateRequestCreate):
     )
     
     if existing_request or existing_user:
+        return None
+    
+    # Check if email is verified
+    if not await is_email_verified(request.email):
         return None
     
     hashed_password = get_password_hash(request.password)
@@ -195,3 +201,111 @@ async def get_all_affiliates(page: int = 1, page_size: int = 20):
         if user and user.is_active:
             result.append(affiliate)
     return result
+
+# Email Verification Functions
+
+def generate_verification_code() -> str:
+    """Generate a 6-digit verification code"""
+    return ''.join(secrets.choice(string.digits) for _ in range(6))
+
+async def create_email_verification(email: str) -> Optional[models.EmailVerification]:
+    """Create or update email verification record"""
+    # Check if verification already exists and is not expired
+    existing = await models.EmailVerification.find_one(
+        models.EmailVerification.email == email
+    )
+    
+    if existing and existing.expires_at > datetime.utcnow() and not existing.is_verified:
+        # Update existing verification with new code
+        existing.verification_code = generate_verification_code()
+        existing.attempts = 0
+        existing.expires_at = datetime.utcnow() + timedelta(hours=24)
+        await existing.save()
+        return existing
+    
+    # Create new verification
+    verification = models.EmailVerification(
+        email=email,
+        verification_code=generate_verification_code(),
+        expires_at=datetime.utcnow() + timedelta(hours=24)
+    )
+    await verification.insert()
+    return verification
+
+async def send_verification_email(email: str) -> bool:
+    """Send verification email to user"""
+    verification = await create_email_verification(email)
+    if not verification:
+        return False
+    
+    # Send email
+    success = await email_service.send_verification_email(email, verification.verification_code)
+    return success
+
+async def verify_email_code(email: str, code: str) -> bool:
+    """Verify email with provided code"""
+    verification = await models.EmailVerification.find_one(
+        models.EmailVerification.email == email
+    )
+    
+    if not verification:
+        return False
+    
+    # Check if already verified
+    if verification.is_verified:
+        return True
+    
+    # Check if expired
+    if verification.expires_at < datetime.utcnow():
+        return False
+    
+    # Check if max attempts exceeded
+    if verification.attempts >= verification.max_attempts:
+        return False
+    
+    # Increment attempts
+    verification.attempts += 1
+    
+    # Check if code matches
+    if verification.verification_code == code:
+        verification.is_verified = True
+        await verification.save()
+        return True
+    else:
+        await verification.save()
+        return False
+
+async def is_email_verified(email: str) -> bool:
+    """Check if email is verified"""
+    verification = await models.EmailVerification.find_one(
+        models.EmailVerification.email == email
+    )
+    
+    if not verification:
+        return False
+    
+    return verification.is_verified and verification.expires_at > datetime.utcnow()
+
+async def resend_verification_email(email: str) -> bool:
+    """Resend verification email"""
+    verification = await models.EmailVerification.find_one(
+        models.EmailVerification.email == email
+    )
+    
+    if not verification:
+        return False
+    
+    # Check if already verified
+    if verification.is_verified:
+        return False
+    
+    # Check if expired
+    if verification.expires_at < datetime.utcnow():
+        # Create new verification
+        verification = await create_email_verification(email)
+        if not verification:
+            return False
+    
+    # Send email
+    success = await email_service.send_verification_email(email, verification.verification_code)
+    return success

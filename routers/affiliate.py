@@ -18,12 +18,20 @@ async def register_affiliate(
     """
     Register a new affiliate using the admin registration link.
     The link_code must match the fixed admin registration link.
+    Email must be verified before registration.
     """
     # Verify registration link
     if not await crud.verify_registration_link(link_code):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invalid registration link. Please contact admin for the correct link."
+        )
+    
+    # Check if email is verified
+    if not await crud.is_email_verified(request.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email must be verified before registration. Please verify your email first."
         )
     
     # Create affiliate request
@@ -94,11 +102,18 @@ async def track_affiliate_link(unique_link: str):
 def get_registration_info():
     """Get information about the registration process"""
     return {
-        "message": "To register as an affiliate, you need the admin registration link",
+        "message": "To register as an affiliate, you need the admin registration link and email verification",
         "registration_url_format": "{base_url}/register/{admin_link}",
         "required_fields": [
             "name", "email", "password", "location", 
             "language", "onemove_link", "puprime_link"
-        ]
+        ],
+        "email_verification_required": True,
+        "verification_endpoints": {
+            "send_verification": "/email/send-verification",
+            "verify_email": "/email/verify-email",
+            "resend_verification": "/email/resend-verification",
+            "check_verification": "/email/check-verification/{email}"
+        }
     }
 

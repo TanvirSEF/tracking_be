@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     BASE_URL: str = "http://localhost:8000"
     # Comma-separated list, e.g. "http://localhost:3000,http://localhost:8000"
     CORS_ORIGINS: str = "*"
+    
+    # Email Configuration
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+    FROM_EMAIL: Optional[str] = None
+    FROM_NAME: str = "Affiliate System"
 
     class Config:
         env_file = ".env"

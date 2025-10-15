@@ -1,7 +1,7 @@
 from beanie import Document, PydanticObjectId
 from pydantic import Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 
 class RequestStatus(str, Enum):
@@ -47,6 +47,18 @@ class Affiliate(Document):
 
     class Settings:
         name = "affiliates"
+
+class EmailVerification(Document):
+    email: str = Field(..., unique=True, index=True)
+    verification_code: str = Field(..., index=True)
+    is_verified: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime = Field(default_factory=lambda: datetime.utcnow() + timedelta(hours=24))
+    attempts: int = Field(default=0)
+    max_attempts: int = Field(default=3)
+
+    class Settings:
+        name = "email_verifications"
 
 class SystemConfig(Document):
     admin_registration_link: str = Field(..., unique=True)
