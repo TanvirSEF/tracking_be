@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     BASE_URL: str = "http://localhost:8000"
     # Comma-separated list, e.g. "http://localhost:3000,http://localhost:8000"
     CORS_ORIGINS: str = "*"
+    
+    # Email verification settings
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str
+    SMTP_PASSWORD: str
+    SMTP_USE_TLS: bool = True
+    FROM_EMAIL: str
+    FROM_NAME: str = "1move Community"
 
     class Config:
         env_file = ".env"

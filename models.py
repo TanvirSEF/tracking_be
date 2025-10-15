@@ -14,6 +14,7 @@ class User(Document):
     hashed_password: str
     is_admin: bool = Field(default=False)
     is_active: bool = Field(default=True)
+    is_email_verified: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
@@ -73,3 +74,14 @@ class SystemConfig(Document):
 
     class Settings:
         name = "system_config"
+
+class EmailVerification(Document):
+    email: str = Field(..., index=True)
+    verification_code: str = Field(..., index=True)
+    is_verified: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime
+    verified_at: Optional[datetime] = None
+
+    class Settings:
+        name = "email_verifications"
