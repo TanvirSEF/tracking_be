@@ -116,18 +116,3 @@ class ReferralResponse(BaseModel):
 class AdminRegistrationLinkResponse(BaseModel):
     registration_link: str
     full_url: str
-
-class EmailVerificationRequest(BaseModel):
-    email: EmailStr
-
-class EmailVerificationResponse(BaseModel):
-    message: str
-    email: str
-
-class VerifyCodeRequest(BaseModel):
-    email: EmailStr
-    verification_code: str = Field(..., min_length=6, max_length=6)
-
-class VerifyCodeResponse(BaseModel):
-    message: str
-    is_verified: bool
