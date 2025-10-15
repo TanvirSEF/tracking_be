@@ -24,7 +24,10 @@ async def lifespan(app: FastAPI):
     else:
         print("Skipping system initialization")
     
-    print("API is ready (database may be disconnected)")
+    if db_connected:
+        print("API is ready (database connected)")
+    else:
+        print("API is ready (database disconnected)")
     
     yield
     

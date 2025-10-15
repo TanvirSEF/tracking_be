@@ -12,7 +12,7 @@ class UserBase(BaseModel):
     email: EmailStr
 
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(..., min_length=6)
 
 class User(UserBase):
     id: str
@@ -72,12 +72,46 @@ class TokenData(BaseModel):
 
 class LoginForm(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=1)
 
 class ApprovalRequest(BaseModel):
     request_id: str
     approve: bool
     reason: Optional[str] = None
+
+class ReferralRegistrationRequest(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    timezone: str = Field(..., min_length=1, max_length=100)
+    location: str = Field(..., min_length=1, max_length=255)
+    headline: str = Field(..., min_length=1, max_length=500)
+    bio: str = Field(..., min_length=1, max_length=2000)
+    broker_id: str = Field(..., min_length=1, max_length=100)
+    invited_person: str = Field(..., min_length=1, max_length=255)
+    find_us: str = Field(..., min_length=1, max_length=500)
+    
+    @validator('full_name', 'location', 'headline', 'bio', 'broker_id', 'invited_person', 'find_us')
+    def strip_whitespace(cls, v):
+        return v.strip()
+
+class ReferralResponse(BaseModel):
+    id: str
+    affiliate_id: str
+    unique_link: str
+    full_name: str
+    email: str
+    timezone: str
+    location: str
+    headline: str
+    bio: str
+    broker_id: str
+    invited_person: str
+    find_us: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class AdminRegistrationLinkResponse(BaseModel):
     registration_link: str

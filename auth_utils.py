@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends
+import hashlib
 import secrets
 import string
+from fastapi import HTTPException
+from fastapi import status
 
 from config import settings
 import models
@@ -17,13 +18,21 @@ SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
-# Use bcrypt_sha256 to avoid the 72-byte bcrypt password limit while
-# remaining compatible with existing bcrypt hashes.
-pwd_context = CryptContext(
-    schemes=["bcrypt_sha256", "bcrypt"],
-    deprecated="auto"
-)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+# Simple password hashing using SHA256 + salt
+def simple_hash_password(password: str) -> str:
+    """Simple password hashing using SHA256 with salt"""
+    salt = secrets.token_hex(16)  # 32 character salt
+    password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    return f"{salt}:{password_hash}"
+
+def simple_verify_password(password: str, hashed_password: str) -> bool:
+    """Simple password verification"""
+    try:
+        salt, stored_hash = hashed_password.split(":", 1)
+        password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+        return password_hash == stored_hash
+    except:
+        return False
 
 # Simple in-memory login attempt tracking (per-process best-effort)
 _login_attempts: Dict[str, Deque[datetime]] = defaultdict(deque)
@@ -48,11 +57,12 @@ def register_login_success(identifier: str) -> None:
     _login_attempts.pop(identifier, None)
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify password using simple hashing"""
+    return simple_verify_password(plain_password, hashed_password)
 
 def get_password_hash(password):
-    # Force bcrypt_sha256 to avoid bcrypt's 72-byte limit and backend quirks
-    return pwd_context.hash(password, scheme="bcrypt_sha256")
+    """Hash password using simple hashing"""
+    return simple_hash_password(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -64,12 +74,30 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_token_from_header(authorization: str = None):
+    """Extract token from Authorization header"""
+    if not authorization:
+        return None
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            return None
+        return token
+    except:
+        return None
+
+async def get_current_user(authorization: str = None):
+    """Get current user from JWT token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    token = get_token_from_header(authorization)
+    if not token:
+        raise credentials_exception
+        
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
@@ -78,10 +106,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
     
-    user = await models.User.find_one(models.User.email == email)
-    if user is None:
-        raise credentials_exception
-    return user
+    try:
+        user = await models.User.find_one(models.User.email == email)
+        if user is None:
+            raise credentials_exception
+        return user
+    except Exception as e:
+        print(f"Database error during user lookup: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable"
+        )
 
 async def get_admin_user(current_user: models.User = Depends(get_current_user)):
     if not current_user.is_admin:

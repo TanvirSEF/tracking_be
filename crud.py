@@ -79,13 +79,43 @@ async def create_affiliate_request(request: schemas.AffiliateRequestCreate):
         puprime_link=request.puprime_link
     )
     await affiliate_request.insert()
-    return affiliate_request
+    
+    # Return response format with string ID
+    return schemas.AffiliateRequestResponse(
+        id=str(affiliate_request.id),
+        name=affiliate_request.name,
+        email=affiliate_request.email,
+        location=affiliate_request.location,
+        language=affiliate_request.language,
+        onemove_link=affiliate_request.onemove_link,
+        puprime_link=affiliate_request.puprime_link,
+        status=affiliate_request.status,
+        created_at=affiliate_request.created_at,
+        reviewed_at=affiliate_request.reviewed_at
+    )
 
 async def get_pending_requests():
     """Get all pending affiliate requests"""
-    return await models.AffiliateRequest.find(
+    requests = await models.AffiliateRequest.find(
         models.AffiliateRequest.status == models.RequestStatus.PENDING
     ).sort("-created_at").to_list()
+    
+    # Convert to response format with string IDs
+    result = []
+    for request in requests:
+        result.append(schemas.AffiliateRequestResponse(
+            id=str(request.id),
+            name=request.name,
+            email=request.email,
+            location=request.location,
+            language=request.language,
+            onemove_link=request.onemove_link,
+            puprime_link=request.puprime_link,
+            status=request.status,
+            created_at=request.created_at,
+            reviewed_at=request.reviewed_at
+        ))
+    return result
 
 async def get_all_requests(
     status: Optional[models.RequestStatus] = None,
@@ -104,7 +134,25 @@ async def get_all_requests(
     query = models.AffiliateRequest.find()
     if status:
         query = query.find(models.AffiliateRequest.status == status)
-    return await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    requests = await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    # Convert to response format with string IDs
+    result = []
+    for request in requests:
+        result.append(schemas.AffiliateRequestResponse(
+            id=str(request.id),
+            name=request.name,
+            email=request.email,
+            location=request.location,
+            language=request.language,
+            onemove_link=request.onemove_link,
+            puprime_link=request.puprime_link,
+            status=request.status,
+            created_at=request.created_at,
+            reviewed_at=request.reviewed_at
+        ))
+    return result
 
 async def approve_affiliate_request(request_id: str, admin_id: str):
     """Approve an affiliate request and create their account"""
@@ -169,10 +217,14 @@ async def reject_affiliate_request(request_id: str, admin_id: str):
 
 async def authenticate_user(email: str, password: str):
     """Authenticate a user"""
-    user = await models.User.find_one(models.User.email == email)
-    if not user or not verify_password(password, user.hashed_password):
+    try:
+        user = await models.User.find_one(models.User.email == email)
+        if not user or not verify_password(password, user.hashed_password):
+            return None
+        return user
+    except Exception as e:
+        print(f"Database error during authentication: {e}")
         return None
-    return user
 
 async def get_affiliate_by_user(user_id: PydanticObjectId):
     """Get affiliate profile by user ID"""
@@ -195,3 +247,92 @@ async def get_all_affiliates(page: int = 1, page_size: int = 20):
         if user and user.is_active:
             result.append(affiliate)
     return result
+
+async def create_referral_registration(unique_link: str, registration_data: schemas.ReferralRegistrationRequest):
+    """Create a new referral registration"""
+    # Find the affiliate by unique link
+    affiliate = await models.Affiliate.find_one(models.Affiliate.unique_link == unique_link)
+    if not affiliate:
+        return None
+    
+    # Check if email already exists
+    existing_referral = await models.Referral.find_one(models.Referral.email == registration_data.email)
+    if existing_referral:
+        return None
+    
+    # Hash the password
+    hashed_password = get_password_hash(registration_data.password)
+    
+    # Create referral record
+    referral = models.Referral(
+        affiliate_id=affiliate.id,
+        unique_link=unique_link,
+        full_name=registration_data.full_name,
+        email=registration_data.email,
+        hashed_password=hashed_password,
+        timezone=registration_data.timezone,
+        location=registration_data.location,
+        headline=registration_data.headline,
+        bio=registration_data.bio,
+        broker_id=registration_data.broker_id,
+        invited_person=registration_data.invited_person,
+        find_us=registration_data.find_us
+    )
+    await referral.insert()
+    
+    # Return response format with string IDs
+    return schemas.ReferralResponse(
+        id=str(referral.id),
+        affiliate_id=str(referral.affiliate_id),
+        unique_link=referral.unique_link,
+        full_name=referral.full_name,
+        email=referral.email,
+        timezone=referral.timezone,
+        location=referral.location,
+        headline=referral.headline,
+        bio=referral.bio,
+        broker_id=referral.broker_id,
+        invited_person=referral.invited_person,
+        find_us=referral.find_us,
+        created_at=referral.created_at
+    )
+
+async def get_referrals_by_affiliate(affiliate_id: str, page: int = 1, page_size: int = 20):
+    """Get all referrals for a specific affiliate (paginated)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+
+    from beanie import PydanticObjectId
+    referrals = await models.Referral.find(
+        models.Referral.affiliate_id == PydanticObjectId(affiliate_id)
+    ).sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    # Convert to response format with string IDs
+    result = []
+    for referral in referrals:
+        result.append(schemas.ReferralResponse(
+            id=str(referral.id),
+            affiliate_id=str(referral.affiliate_id),
+            unique_link=referral.unique_link,
+            full_name=referral.full_name,
+            email=referral.email,
+            timezone=referral.timezone,
+            location=referral.location,
+            headline=referral.headline,
+            bio=referral.bio,
+            broker_id=referral.broker_id,
+            invited_person=referral.invited_person,
+            find_us=referral.find_us,
+            created_at=referral.created_at
+        ))
+    return result
+
+async def get_referral_count_by_affiliate(affiliate_id: str):
+    """Get total count of referrals for a specific affiliate"""
+    from beanie import PydanticObjectId
+    return await models.Referral.find(models.Referral.affiliate_id == PydanticObjectId(affiliate_id)).count()

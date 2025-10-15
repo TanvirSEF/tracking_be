@@ -1,6 +1,6 @@
 import motor.motor_asyncio
 from beanie import init_beanie
-from models import User, AffiliateRequest, Affiliate, SystemConfig
+from models import User, AffiliateRequest, Affiliate, Referral, SystemConfig
 from config import settings
 
 # Global flag
@@ -22,11 +22,12 @@ async def init_db():
         await client.admin.command('ping')
         print("Connected to MongoDB")
         
-        database = client.get_database()
+        # Use a specific database name
+        database = client.get_database("affiliate_db")
         
         await init_beanie(
             database=database,
-            document_models=[User, AffiliateRequest, Affiliate, SystemConfig]
+            document_models=[User, AffiliateRequest, Affiliate, Referral, SystemConfig]
         )
         
         database_initialized = True
