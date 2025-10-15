@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Header
 from datetime import timedelta
-from fastapi.security import OAuth2PasswordRequestForm
+from typing import Optional
 
 import schemas
 import crud
@@ -10,23 +10,24 @@ router = APIRouter()
 
 
 @router.post("/login", response_model=schemas.Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Login endpoint for admin and affiliates"""
-    # OAuth2PasswordRequestForm uses 'username' field; we treat it as email
-    identifier = form_data.username.lower().strip()
+async def login(login_data: schemas.LoginForm):
+    """Simple login endpoint for admin and affiliates"""
+    # Use email directly from the custom form
+    identifier = login_data.email.lower().strip()
+    
+    # Simple rate limiting (optional - can be removed for even more simplicity)
     if not auth.is_login_allowed(identifier):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts. Please try again later."
         )
 
-    user = await crud.authenticate_user(identifier, form_data.password)
+    user = await crud.authenticate_user(identifier, login_data.password)
     if not user:
         auth.register_login_failure(identifier)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Incorrect email or password"
         )
     
     if not user.is_active:

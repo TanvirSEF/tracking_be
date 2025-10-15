@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, HTTPException, status, Request, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 
 import models
@@ -8,12 +9,27 @@ import auth_utils as auth
 from config import settings
 
 router = APIRouter()
+security = HTTPBearer()
+
+
+# Dependency to verify admin user
+async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Dependency to get current admin user"""
+    token = credentials.credentials
+    current_user = await auth.get_current_user(token)
+    
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    return current_user
 
 
 @router.get("/registration-link", response_model=schemas.AdminRegistrationLinkResponse)
 async def get_admin_registration_link(
     request: Request,
-    current_user: models.User = Depends(auth.get_admin_user)
+    current_user: models.User = Depends(get_current_admin)
 ):
     """Get the fixed admin registration link"""
     admin_link = await crud.get_admin_registration_link()
@@ -26,38 +42,18 @@ async def get_admin_registration_link(
 
 
 @router.get("/pending-requests", response_model=List[schemas.AffiliateRequestResponse])
-async def get_pending_requests(
-    current_user: models.User = Depends(auth.get_admin_user)
-):
+async def get_pending_requests(current_user: models.User = Depends(get_current_admin)):
     """Get all pending affiliate requests"""
     return await crud.get_pending_requests()
 
 
-@router.get("/all-requests", response_model=List[schemas.AffiliateRequestResponse])
-async def get_all_requests(
-    status: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
-    current_user: models.User = Depends(auth.get_admin_user)
-):
-    """Get all affiliate requests, optionally filtered by status"""
-    status_enum = None
-    if status:
-        try:
-            status_enum = models.RequestStatus(status.lower())
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Must be one of: {[s.value for s in models.RequestStatus]}"
-            )
-    
-    return await crud.get_all_requests(status_enum, page=page, page_size=page_size)
+
 
 
 @router.post("/review-request")
 async def review_affiliate_request(
     approval: schemas.ApprovalRequest,
-    current_user: models.User = Depends(auth.get_admin_user)
+    current_user: models.User = Depends(get_current_admin)
 ):
     """Approve or reject an affiliate request"""
     if approval.approve:
@@ -94,7 +90,7 @@ async def review_affiliate_request(
 async def get_all_affiliates(
     page: int = 1,
     page_size: int = 20,
-    current_user: models.User = Depends(auth.get_admin_user)
+    current_user: models.User = Depends(get_current_admin)
 ):
     """Get all approved affiliates"""
     affiliates = await crud.get_all_affiliates(page=page, page_size=page_size)
@@ -112,4 +108,3 @@ async def get_all_affiliates(
                 created_at=affiliate.created_at
             ))
     return result
-

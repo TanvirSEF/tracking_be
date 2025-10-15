@@ -48,6 +48,24 @@ class Affiliate(Document):
     class Settings:
         name = "affiliates"
 
+class Referral(Document):
+    affiliate_id: PydanticObjectId = Field(..., index=True)  # Which affiliate referred them
+    unique_link: str = Field(..., index=True)  # The affiliate's unique link used
+    full_name: str
+    email: str = Field(..., unique=True, index=True)
+    hashed_password: str
+    timezone: str
+    location: str
+    headline: str
+    bio: str
+    broker_id: str
+    invited_person: str
+    find_us: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "referrals"
+
 class SystemConfig(Document):
     admin_registration_link: str = Field(..., unique=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
