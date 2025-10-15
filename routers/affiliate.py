@@ -28,6 +28,13 @@ async def register_affiliate(
             detail="Invalid registration link. Please contact admin for the correct link."
         )
     
+    # Check if email is already verified
+    if not await crud.is_email_verified(request.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email not verified. Please verify your email first."
+        )
+    
     # Create affiliate request
     affiliate_request = await crud.create_affiliate_request(request)
     if not affiliate_request:
@@ -83,6 +90,13 @@ async def register_through_affiliate_link(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invalid affiliate link"
+        )
+    
+    # Check if email is already verified
+    if not await crud.is_email_verified(registration_data.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email not verified. Please verify your email first."
         )
     
     # Create the referral registration
@@ -185,6 +199,48 @@ async def debug_affiliate_match(credentials: HTTPAuthorizationCredentials = Depe
         "matching_referrals_count": len(matching_referrals),
         "matching_referrals": matching_referrals,
         "all_referrals_affiliate_ids": [str(r.affiliate_id) for r in all_referrals]
+    }
+
+
+# Email verification endpoints
+@router.post("/send-verification", response_model=schemas.EmailVerificationResponse)
+async def send_email_verification(request: schemas.EmailVerificationRequest):
+    """Send verification code to email"""
+    # Check if email is already verified
+    if await crud.is_email_verified(request.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified"
+        )
+    
+    # Send verification code
+    success = await crud.send_verification_code(request.email)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email"
+        )
+    
+    return {
+        "message": "Verification code sent to your email",
+        "email": request.email
+    }
+
+@router.post("/verify-email", response_model=schemas.VerifyCodeResponse)
+async def verify_email_code(request: schemas.VerifyCodeRequest):
+    """Verify email with verification code"""
+    success = await crud.verify_email_code(request.email, request.verification_code)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code"
+        )
+    
+    return {
+        "message": "Email verified successfully",
+        "is_verified": True
     }
 
 

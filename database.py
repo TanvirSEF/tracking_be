@@ -1,6 +1,6 @@
 import motor.motor_asyncio
 from beanie import init_beanie
-from models import User, AffiliateRequest, Affiliate, Referral, SystemConfig
+from models import User, AffiliateRequest, Affiliate, Referral, SystemConfig, EmailVerification
 from config import settings
 
 # Global flag
@@ -27,7 +27,7 @@ async def init_db():
         
         await init_beanie(
             database=database,
-            document_models=[User, AffiliateRequest, Affiliate, Referral, SystemConfig]
+            document_models=[User, AffiliateRequest, Affiliate, Referral, SystemConfig, EmailVerification]
         )
         
         database_initialized = True

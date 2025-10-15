@@ -332,6 +332,45 @@ All admin endpoints require admin authentication.
 }
 ```
 
+#### POST /send-verification
+**Purpose**: Send verification code to email address
+**Authentication**: None required
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response**:
+```json
+{
+  "message": "Verification code sent to your email",
+  "email": "user@example.com"
+}
+```
+
+#### POST /verify-email
+**Purpose**: Verify email with verification code
+**Authentication**: None required
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "verification_code": "123456"
+}
+```
+
+**Response**:
+```json
+{
+  "message": "Email verified successfully",
+  "is_verified": true
+}
+```
+
 ---
 
 ## 🔧 Debug Endpoints
@@ -410,6 +449,12 @@ All list endpoints support pagination with:
 1. Anyone can register through affiliate links at `POST /ref/{unique_link}`
 2. This creates referral records linked to the affiliate
 
+### Email Verification Flow
+1. User sends email to `POST /send-verification` to get verification code
+2. User receives 6-digit verification code via email (expires in 15 minutes)
+3. User verifies email with `POST /verify-email` using the code
+4. Once verified, user can proceed with affiliate registration or referral registration
+
 ---
 
 ## 🛠️ Development
@@ -426,14 +471,24 @@ ADMIN_PASSWORD=adminpassword
 ADMIN_REGISTRATION_LINK=ADMIN-SECURE-LINK-2024
 BASE_URL=http://localhost:8000
 CORS_ORIGINS=*
+
+# Email verification settings
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_USE_TLS=true
+FROM_EMAIL=your-email@gmail.com
+FROM_NAME=1move Community
 ```
 
 ### Database Models
-- **User**: Authentication and role management
+- **User**: Authentication and role management with email verification status
 - **AffiliateRequest**: Pending affiliate applications
 - **Affiliate**: Approved affiliate profiles
 - **Referral**: Members registered through affiliate links
 - **SystemConfig**: System configuration
+- **EmailVerification**: Email verification codes and status
 
 ---
 
