@@ -104,6 +104,8 @@ async def get_all_affiliates(
                 email=user.email,
                 location=affiliate.location,
                 language=affiliate.language,
+                onemove_link=affiliate.onemove_link,
+                puprime_link=affiliate.puprime_link,
                 unique_link=f"{settings.BASE_URL}/ref/{affiliate.unique_link}",
                 created_at=affiliate.created_at
             ))
