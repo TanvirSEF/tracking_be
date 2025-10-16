@@ -57,6 +57,8 @@ class AffiliateResponse(BaseModel):
     email: str
     location: str
     language: str
+    onemove_link: str
+    puprime_link: str
     unique_link: str
     created_at: datetime
 
