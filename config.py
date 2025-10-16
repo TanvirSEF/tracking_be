@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: Optional[str] = None
     ADMIN_PASSWORD: Optional[str] = None
     BASE_URL: str = "http://localhost:8000"
+    FRONTEND_URL: str = "https://1move-final.vercel.app"
     # Comma-separated list, e.g. "http://localhost:3000,http://localhost:8000"
     CORS_ORIGINS: str = "*"
 

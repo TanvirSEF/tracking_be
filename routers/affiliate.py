@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, status, Header, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import RedirectResponse
 from typing import List
+import urllib.parse
 
 import models
 import schemas
@@ -39,6 +41,43 @@ async def register_affiliate(
     return affiliate_request
 
 
+@router.get("/ref/{unique_link}")
+async def redirect_to_frontend_registration(unique_link: str):
+    """
+    Redirect users to frontend registration form with affiliate info.
+    This endpoint handles the redirect from affiliate links to the frontend.
+    """
+    # Find the affiliate by unique link
+    affiliate = await models.Affiliate.find_one(
+        models.Affiliate.unique_link == unique_link
+    )
+    
+    if not affiliate:
+        # If affiliate not found, redirect to frontend without affiliate info
+        frontend_url = f"{settings.FRONTEND_URL}/register"
+        return RedirectResponse(url=frontend_url, status_code=302)
+    
+    # Get the affiliate's user info to get their email/name
+    user = await models.User.find_one(models.User.id == affiliate.user_id)
+    
+    if not user or not user.is_active:
+        # If user not found or inactive, redirect without affiliate info
+        frontend_url = f"{settings.FRONTEND_URL}/register"
+        return RedirectResponse(url=frontend_url, status_code=302)
+    
+    # Create frontend URL with affiliate info as query parameters
+    frontend_base_url = f"{settings.FRONTEND_URL}/register"
+    
+    # URL encode the affiliate name to handle special characters
+    affiliate_name_encoded = urllib.parse.quote(affiliate.name)
+    affiliate_email_encoded = urllib.parse.quote(user.email)
+    
+    # Add query parameters
+    frontend_url = f"{frontend_base_url}?invited_by={affiliate_name_encoded}&affiliate_email={affiliate_email_encoded}&affiliate_link={unique_link}"
+    
+    return RedirectResponse(url=frontend_url, status_code=302)
+
+
 @router.get("/affiliate/profile", response_model=schemas.AffiliateResponse)
 async def get_affiliate_profile(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current affiliate's profile"""
@@ -70,7 +109,7 @@ async def get_affiliate_profile(credentials: HTTPAuthorizationCredentials = Depe
     )
 
 
-@router.post("/ref/{unique_link}", response_model=schemas.ReferralResponse)
+@router.post("/ref/{unique_link}/register", response_model=schemas.ReferralResponse)
 async def register_through_affiliate_link(
     unique_link: str,
     registration_data: schemas.ReferralRegistrationRequest
