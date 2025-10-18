@@ -192,6 +192,96 @@ async def get_affiliate_referral_count(
     return {"total_referrals": count}
 
 
+@router.delete("/affiliate/profile")
+async def delete_affiliate_profile(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Delete current affiliate's profile and associated user account"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users don't have affiliate profiles"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Delete all referrals associated with this affiliate
+    await models.Referral.find(
+        models.Referral.affiliate_id == affiliate.id
+    ).delete()
+    
+    # Delete the affiliate profile
+    await affiliate.delete()
+    
+    # Delete the user account
+    await current_user.delete()
+    
+    return {
+        "message": "Affiliate profile and account deleted successfully",
+        "deleted_affiliate_id": str(affiliate.id),
+        "deleted_user_id": str(current_user.id)
+    }
+
+
+@router.delete("/affiliate/referrals/{referral_id}")
+async def delete_affiliate_referral(
+    referral_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Delete a specific referral user"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users don't have affiliate referrals"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Find the referral
+    from beanie import PydanticObjectId
+    referral = await models.Referral.find_one(
+        models.Referral.id == PydanticObjectId(referral_id)
+    )
+    
+    if not referral:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Referral not found"
+        )
+    
+    # Verify the referral belongs to this affiliate
+    if str(referral.affiliate_id) != str(affiliate.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own referrals"
+        )
+    
+    # Delete the referral
+    await referral.delete()
+    
+    return {
+        "message": "Referral deleted successfully",
+        "deleted_referral_id": str(referral.id),
+        "referral_email": referral.email
+    }
+
+
 @router.get("/debug/check-affiliate-match")
 async def debug_affiliate_match(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Debug endpoint to check if affiliate IDs match"""

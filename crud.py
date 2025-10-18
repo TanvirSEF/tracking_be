@@ -336,3 +336,37 @@ async def get_referral_count_by_affiliate(affiliate_id: str):
     """Get total count of referrals for a specific affiliate"""
     from beanie import PydanticObjectId
     return await models.Referral.find(models.Referral.affiliate_id == PydanticObjectId(affiliate_id)).count()
+
+async def delete_affiliate_profile(user_id: PydanticObjectId):
+    """Delete affiliate profile and all associated data"""
+    # Get affiliate
+    affiliate = await models.Affiliate.find_one(models.Affiliate.user_id == user_id)
+    if not affiliate:
+        return None
+    
+    # Delete all referrals
+    await models.Referral.find(
+        models.Referral.affiliate_id == affiliate.id
+    ).delete()
+    
+    # Delete affiliate profile
+    await affiliate.delete()
+    
+    # Delete user account
+    user = await models.User.find_one(models.User.id == user_id)
+    if user:
+        await user.delete()
+    
+    return True
+
+async def delete_referral_by_id(referral_id: str, affiliate_id: str):
+    """Delete a specific referral"""
+    referral = await models.Referral.find_one(
+        models.Referral.id == PydanticObjectId(referral_id)
+    )
+    
+    if not referral or str(referral.affiliate_id) != affiliate_id:
+        return None
+    
+    await referral.delete()
+    return True
