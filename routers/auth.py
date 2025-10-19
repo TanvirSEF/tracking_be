@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Header
 from datetime import timedelta
 from typing import Optional
+from pydantic import BaseModel
 
 import schemas
 import crud
@@ -42,4 +43,55 @@ async def login(login_data: schemas.LoginForm):
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+# Email verification endpoints
+class ResendVerificationRequest(BaseModel):
+    email: str
+    user_type: str  # "admin", "affiliate", "referral"
+
+class VerifyEmailRequest(BaseModel):
+    email: str
+    code: str
+
+@router.post("/verify-email")
+async def verify_email(request: VerifyEmailRequest):
+    """Verify email address using 6-digit code"""
+    result = await crud.verify_email_token(request.code)
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code"
+        )
+    
+    # Check if email matches
+    user_email = result[result["type"]].email if result["type"] != "referral" else result["referral"].email
+    if user_email != request.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email does not match verification code"
+        )
+    
+    return {
+        "message": "Email verified successfully",
+        "type": result["type"],
+        "email": user_email
+    }
+
+@router.post("/resend-verification")
+async def resend_verification_email(request: ResendVerificationRequest):
+    """Resend verification email"""
+    success = await crud.resend_verification_email(request.email, request.user_type)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email not found or already verified"
+        )
+    
+    return {
+        "message": "Verification email sent successfully",
+        "email": request.email
+    }
 
