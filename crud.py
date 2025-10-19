@@ -187,7 +187,8 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
     
     # Check if email is verified (only if email verification is enabled)
     if settings.EMAIL_VERIFICATION_ENABLED and not request.is_email_verified:
-        return None  # Cannot approve unverified requests
+        # Return a specific error instead of None to provide better feedback
+        raise ValueError("Email not verified - user must verify email before approval")
     
     # Create user account
     user = models.User(
