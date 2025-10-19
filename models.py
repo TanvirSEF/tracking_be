@@ -1,8 +1,9 @@
 from beanie import Document, PydanticObjectId
 from pydantic import Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
+import secrets
 
 class RequestStatus(str, Enum):
     PENDING = "pending"
@@ -14,6 +15,7 @@ class User(Document):
     hashed_password: str
     is_admin: bool = Field(default=False)
     is_active: bool = Field(default=True)
+    is_email_verified: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
@@ -28,6 +30,7 @@ class AffiliateRequest(Document):
     onemove_link: str
     puprime_link: str
     status: RequestStatus = Field(default=RequestStatus.PENDING)
+    is_email_verified: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[str] = None
@@ -65,6 +68,18 @@ class Referral(Document):
 
     class Settings:
         name = "referrals"
+
+class EmailVerificationToken(Document):
+    email: str = Field(..., index=True)
+    token: str = Field(..., unique=True, index=True)
+    token_type: str = Field(..., index=True)  # "admin_registration", "affiliate_registration", "referral_registration"
+    expires_at: datetime
+    is_used: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    used_at: Optional[datetime] = None
+
+    class Settings:
+        name = "email_verification_tokens"
 
 class SystemConfig(Document):
     admin_registration_link: str = Field(..., unique=True)

@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "https://1move-final.vercel.app"
     # Comma-separated list, e.g. "http://localhost:3000,http://localhost:8000"
     CORS_ORIGINS: str = "*"
+    
+    # Email verification settings
+    EMAIL_VERIFICATION_ENABLED: bool = True
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
+    EMAIL_SMTP_HOST: str = "smtp.gmail.com"
+    EMAIL_SMTP_PORT: int = 587
+    EMAIL_SMTP_USERNAME: Optional[str] = None
+    EMAIL_SMTP_PASSWORD: Optional[str] = None
+    EMAIL_FROM_NAME: str = "Affiliate Management System"
+    EMAIL_FROM_EMAIL: Optional[str] = None
 
     class Config:
         env_file = ".env"

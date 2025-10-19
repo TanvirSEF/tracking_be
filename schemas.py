@@ -18,6 +18,7 @@ class User(UserBase):
     id: str
     is_admin: bool
     is_active: bool
+    is_email_verified: bool
     created_at: datetime
 
     class Config:
@@ -45,6 +46,7 @@ class AffiliateRequestResponse(BaseModel):
     onemove_link: str
     puprime_link: str
     status: RequestStatus
+    is_email_verified: bool
     created_at: datetime
     reviewed_at: Optional[datetime] = None
 
