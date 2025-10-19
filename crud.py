@@ -171,7 +171,16 @@ async def get_all_requests(
 
 async def approve_affiliate_request(request_id: str, admin_id: str):
     """Approve an affiliate request and create their account"""
-    request = await models.AffiliateRequest.get(request_id)
+    # Handle both string and ObjectId formats
+    try:
+        from bson import ObjectId
+        if isinstance(request_id, str):
+            request = await models.AffiliateRequest.get(ObjectId(request_id))
+        else:
+            request = await models.AffiliateRequest.get(request_id)
+    except Exception:
+        # Fallback to string search
+        request = await models.AffiliateRequest.find_one(models.AffiliateRequest.id == request_id)
     
     if not request or request.status != models.RequestStatus.PENDING:
         return None
@@ -227,7 +236,16 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
 
 async def reject_affiliate_request(request_id: str, admin_id: str):
     """Reject an affiliate request"""
-    request = await models.AffiliateRequest.get(request_id)
+    # Handle both string and ObjectId formats
+    try:
+        from bson import ObjectId
+        if isinstance(request_id, str):
+            request = await models.AffiliateRequest.get(ObjectId(request_id))
+        else:
+            request = await models.AffiliateRequest.get(request_id)
+    except Exception:
+        # Fallback to string search
+        request = await models.AffiliateRequest.find_one(models.AffiliateRequest.id == request_id)
     
     if not request or request.status != models.RequestStatus.PENDING:
         return None
