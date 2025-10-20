@@ -72,10 +72,27 @@ def read_root():
 
 # Health check
 @app.get("/health")
-def health_check():
+async def health_check():
+    from database import database_initialized
+    import motor.motor_asyncio
+    from config import settings
+    
+    # Test actual database connection
+    db_status = "disconnected"
+    if database_initialized:
+        try:
+            client = motor.motor_asyncio.AsyncIOMotorClient(
+                settings.DATABASE_URL,
+                serverSelectionTimeoutMS=2000
+            )
+            await client.admin.command('ping')
+            db_status = "connected"
+        except:
+            db_status = "disconnected"
+    
     return {
         "status": "healthy",
-        "database": "connected" if database_initialized else "disconnected"
+        "database": db_status
     }
 
 if __name__ == "__main__":
