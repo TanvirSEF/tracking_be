@@ -240,8 +240,13 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
     request.reviewed_by = admin_id
     await request.save()
     
-    # Send welcome email
-    await send_welcome_email(request.email, "affiliate", request.name)
+    # Send welcome email after successful approval
+    try:
+        await send_welcome_email(request.email, "affiliate", request.name)
+        print(f"Welcome email sent to {request.email}")
+    except Exception as e:
+        print(f"Warning: Failed to send welcome email to {request.email}: {e}")
+        # Don't fail the approval process if email fails
     
     return affiliate
 
@@ -457,14 +462,20 @@ async def verify_email_token(token: str):
         if request:
             request.is_email_verified = True
             await request.save()
-            await send_welcome_email(request.email, "affiliate", request.name)
+            try:
+                await send_welcome_email(request.email, "affiliate", request.name)
+            except Exception as e:
+                print(f"Warning: Failed to send welcome email to {request.email}: {e}")
             return {"type": "affiliate_request", "request": request}
     
     elif token_record.token_type == "referral_registration":
         # Verify referral
         referral = await models.Referral.find_one(models.Referral.email == token_record.email)
         if referral:
-            await send_welcome_email(referral.email, "referral", referral.full_name)
+            try:
+                await send_welcome_email(referral.email, "referral", referral.full_name)
+            except Exception as e:
+                print(f"Warning: Failed to send welcome email to {referral.email}: {e}")
             return {"type": "referral", "referral": referral}
     
     return None

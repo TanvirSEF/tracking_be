@@ -57,27 +57,52 @@ class VerifyEmailRequest(BaseModel):
 @router.post("/verify-email")
 async def verify_email(request: VerifyEmailRequest):
     """Verify email address using 6-digit code"""
-    result = await crud.verify_email_token(request.code)
-    
-    if not result:
+    try:
+        result = await crud.verify_email_token(request.code)
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification code"
+            )
+        
+        # Extract email based on user type
+        user_email = None
+        if result["type"] == "referral":
+            user_email = result["referral"].email
+        elif result["type"] == "affiliate_request":
+            user_email = result["request"].email
+        elif result["type"] == "admin":
+            user_email = result["user"].email
+        
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to process verification"
+            )
+        
+        # Verify email matches
+        if user_email != request.email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email does not match verification code"
+            )
+        
+        return {
+            "message": "Email verified successfully",
+            "type": result["type"],
+            "email": user_email,
+            "status": "verified"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in verify_email: {e}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification code"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during verification"
         )
-    
-    # Check if email matches
-    user_email = result[result["type"]].email if result["type"] != "referral" else result["referral"].email
-    if user_email != request.email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email does not match verification code"
-        )
-    
-    return {
-        "message": "Email verified successfully",
-        "type": result["type"],
-        "email": user_email
-    }
 
 @router.post("/resend-verification")
 async def resend_verification_email(request: ResendVerificationRequest):
