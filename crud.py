@@ -333,7 +333,8 @@ async def create_referral_registration(unique_link: str, registration_data: sche
         bio=registration_data.bio,
         broker_id=registration_data.broker_id,
         invited_person=registration_data.invited_person,
-        find_us=registration_data.find_us
+        find_us=registration_data.find_us,
+        onemove_link=registration_data.onemove_link
     )
     await referral.insert()
     
@@ -356,6 +357,7 @@ async def create_referral_registration(unique_link: str, registration_data: sche
         broker_id=referral.broker_id,
         invited_person=referral.invited_person,
         find_us=referral.find_us,
+        onemove_link=referral.onemove_link,
         created_at=referral.created_at
     )
 
@@ -390,6 +392,7 @@ async def get_referrals_by_affiliate(affiliate_id: str, page: int = 1, page_size
             broker_id=referral.broker_id,
             invited_person=referral.invited_person,
             find_us=referral.find_us,
+            onemove_link=referral.onemove_link,
             created_at=referral.created_at
         ))
     return result

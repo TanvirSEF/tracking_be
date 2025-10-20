@@ -124,3 +124,57 @@ async def get_all_affiliates(
                 created_at=affiliate.created_at
             ))
     return result
+
+
+@router.delete("/affiliates/{affiliate_id}")
+async def delete_affiliate_profile(
+    affiliate_id: str,
+    current_user: models.User = Depends(get_current_admin)
+):
+    """Delete an affiliate profile and all associated data"""
+    from beanie import PydanticObjectId
+    
+    try:
+        # Convert string to ObjectId
+        affiliate_object_id = PydanticObjectId(affiliate_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid affiliate ID format"
+        )
+    
+    # Find the affiliate
+    affiliate = await models.Affiliate.find_one(models.Affiliate.id == affiliate_object_id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate not found"
+        )
+    
+    # Get the user associated with this affiliate
+    user = await models.User.find_one(models.User.id == affiliate.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated user not found"
+        )
+    
+    # Delete all referrals associated with this affiliate
+    referrals_result = await models.Referral.find(
+        models.Referral.affiliate_id == affiliate.id
+    ).delete()
+    
+    # Delete the affiliate profile
+    await affiliate.delete()
+    
+    # Delete the user account
+    await user.delete()
+    
+    return {
+        "message": "Affiliate profile and account deleted successfully",
+        "deleted_affiliate_id": str(affiliate.id),
+        "deleted_user_id": str(user.id),
+        "deleted_referrals_count": referrals_result.deleted_count,
+        "deleted_by_admin": current_user.email,
+        "deleted_at": datetime.utcnow().isoformat()
+    }
