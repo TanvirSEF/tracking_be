@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
+from datetime import datetime
 
 import models
 import schemas
@@ -78,7 +79,10 @@ async def review_affiliate_request(
             "message": "Affiliate approved successfully",
             "affiliate_id": str(affiliate.id),
             "unique_link": f"{settings.BASE_URL}/ref/{affiliate.unique_link}",
-            "affiliate_email": user.email
+            "affiliate_email": user.email,
+            "status": "approved",
+            "admin_reviewer": current_user.email,
+            "reviewed_at": datetime.utcnow().isoformat()
         }
     else:
         request = await crud.reject_affiliate_request(approval.request_id, str(current_user.id))
@@ -88,8 +92,11 @@ async def review_affiliate_request(
                 detail="Request not found or already processed"
             )
         return {
-            "request": "Affiliate request rejected",
-            "reason": approval.reason if approval.reason else "No reason provided"
+            "message": "Affiliate request rejected",
+            "reason": approval.reason if approval.reason else "No reason provided",
+            "status": "rejected",
+            "admin_reviewer": current_user.email,
+            "reviewed_at": datetime.utcnow().isoformat()
         }
 
 

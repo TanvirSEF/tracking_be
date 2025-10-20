@@ -35,7 +35,7 @@ async def register_affiliate(
     if not affiliate_request:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered or pending approval"
+            detail="Email already registered or pending approval. Please check your email for verification or contact admin."
         )
     
     return affiliate_request
@@ -282,41 +282,52 @@ async def delete_affiliate_referral(
     }
 
 
-@router.get("/debug/check-affiliate-match")
-async def debug_affiliate_match(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Debug endpoint to check if affiliate IDs match"""
+@router.get("/affiliate/status")
+async def get_affiliate_status(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get affiliate registration status and workflow progress"""
     current_user = await auth.get_current_user(credentials.credentials)
     
-    # Get the affiliate profile
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users don't have affiliate status"
+        )
+    
+    # Check if user has affiliate profile
     affiliate = await crud.get_affiliate_by_user(current_user.id)
-    if not affiliate:
-        return {"error": "Affiliate profile not found", "user_id": str(current_user.id)}
     
-    # Get all referrals in database
-    all_referrals = await models.Referral.find().to_list()
-    
-    # Check which referrals match this affiliate
-    matching_referrals = []
-    for referral in all_referrals:
-        if str(referral.affiliate_id) == str(affiliate.id):
-            matching_referrals.append({
-                "id": str(referral.id),
-                "email": referral.email,
-                "full_name": referral.full_name,
-                "created_at": referral.created_at
-            })
-    
-    return {
-        "current_user_id": str(current_user.id),
-        "current_user_email": current_user.email,
-        "affiliate_id": str(affiliate.id),
-        "affiliate_name": affiliate.name,
-        "affiliate_unique_link": affiliate.unique_link,
-        "total_referrals_in_db": len(all_referrals),
-        "matching_referrals_count": len(matching_referrals),
-        "matching_referrals": matching_referrals,
-        "all_referrals_affiliate_ids": [str(r.affiliate_id) for r in all_referrals]
-    }
+    if affiliate:
+        # User is approved affiliate
+        referrals_count = await crud.get_referral_count_by_affiliate(str(affiliate.id))
+        return {
+            "status": "approved",
+            "message": "Your affiliate account is active",
+            "affiliate_id": str(affiliate.id),
+            "unique_link": f"{settings.BASE_URL}/ref/{affiliate.unique_link}",
+            "total_referrals": referrals_count,
+            "can_login": True
+        }
+    else:
+        # Check if user has pending request
+        request = await models.AffiliateRequest.find_one(
+            models.AffiliateRequest.email == current_user.email
+        )
+        
+        if request:
+            return {
+                "status": request.status,
+                "message": f"Your request is {request.status}",
+                "is_email_verified": request.is_email_verified,
+                "created_at": request.created_at,
+                "reviewed_at": request.reviewed_at,
+                "can_login": request.status == "approved"
+            }
+        else:
+            return {
+                "status": "not_registered",
+                "message": "You need to register as an affiliate first",
+                "can_login": False
+            }
 
 
 

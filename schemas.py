@@ -49,6 +49,7 @@ class AffiliateRequestResponse(BaseModel):
     is_email_verified: bool
     created_at: datetime
     reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
 
     class Config:
         from_attributes = True

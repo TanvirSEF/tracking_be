@@ -87,7 +87,7 @@ def get_token_from_header(authorization: str = None):
     except:
         return None
 
-async def get_current_user(authorization: str = None):
+async def get_current_user(token: str = None):
     """Get current user from JWT token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -95,7 +95,6 @@ async def get_current_user(authorization: str = None):
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    token = get_token_from_header(authorization)
     if not token:
         raise credentials_exception
         
