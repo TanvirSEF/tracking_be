@@ -4,6 +4,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 from enum import Enum
 import secrets
+from typing import Optional
 
 class RequestStatus(str, Enum):
     PENDING = "pending"
@@ -64,6 +65,7 @@ class Referral(Document):
     broker_id: str
     invited_person: str
     find_us: str
+    onemove_link: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:

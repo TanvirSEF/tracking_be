@@ -95,8 +95,9 @@ class ReferralRegistrationRequest(BaseModel):
     broker_id: str = Field(..., min_length=1, max_length=100)
     invited_person: str = Field(..., min_length=1, max_length=255)
     find_us: str = Field(..., min_length=1, max_length=500)
+    onemove_link: str = Field(..., min_length=1)
     
-    @validator('full_name', 'location', 'headline', 'bio', 'broker_id', 'invited_person', 'find_us')
+    @validator('full_name', 'location', 'headline', 'bio', 'broker_id', 'invited_person', 'find_us', 'onemove_link')
     def strip_whitespace(cls, v):
         return v.strip()
 
@@ -113,6 +114,7 @@ class ReferralResponse(BaseModel):
     broker_id: str
     invited_person: str
     find_us: str
+    onemove_link: str
     created_at: datetime
 
     class Config:
