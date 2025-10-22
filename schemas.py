@@ -90,16 +90,18 @@ class ReferralRegistrationRequest(BaseModel):
     password: str = Field(..., min_length=6)
     timezone: str = Field(..., min_length=1, max_length=100)
     location: str = Field(..., min_length=1, max_length=255)
-    headline: str = Field(..., min_length=1, max_length=500)
-    bio: str = Field(..., min_length=1, max_length=2000)
-    broker_id: str = Field(..., min_length=1, max_length=100)
+    headline: Optional[str] = Field(None, min_length=1, max_length=500)
+    bio: Optional[str] = Field(None, min_length=1, max_length=2000)
+    broker_id: Optional[str] = Field(None, min_length=1, max_length=100)
     invited_person: str = Field(..., min_length=1, max_length=255)
     find_us: str = Field(..., min_length=1, max_length=500)
     onemove_link: str = Field(..., min_length=1)
     
     @validator('full_name', 'location', 'headline', 'bio', 'broker_id', 'invited_person', 'find_us', 'onemove_link')
     def strip_whitespace(cls, v):
-        return v.strip()
+        if v is not None:
+            return v.strip()
+        return v
 
 class ReferralResponse(BaseModel):
     id: str
@@ -109,9 +111,9 @@ class ReferralResponse(BaseModel):
     email: str
     timezone: str
     location: str
-    headline: str
-    bio: str
-    broker_id: str
+    headline: Optional[str] = None
+    bio: Optional[str] = None
+    broker_id: Optional[str] = None
     invited_person: str
     find_us: str
     onemove_link: str
