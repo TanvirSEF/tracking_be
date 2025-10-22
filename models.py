@@ -60,9 +60,9 @@ class Referral(Document):
     hashed_password: str
     timezone: str
     location: str
-    headline: str
-    bio: str
-    broker_id: str
+    headline: Optional[str] = None
+    bio: Optional[str] = None
+    broker_id: Optional[str] = None
     invited_person: str
     find_us: str
     onemove_link: Optional[str] = None
