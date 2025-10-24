@@ -214,8 +214,13 @@ async def delete_affiliate_profile(
         )
     
     # Delete all referrals associated with this affiliate
-    await models.Referral.find(
+    referrals_result = await models.Referral.find(
         models.Referral.affiliate_id == affiliate.id
+    ).delete()
+    
+    # Delete the affiliate request associated with this user's email
+    affiliate_request_result = await models.AffiliateRequest.find(
+        models.AffiliateRequest.email == current_user.email
     ).delete()
     
     # Delete the affiliate profile
@@ -227,7 +232,9 @@ async def delete_affiliate_profile(
     return {
         "message": "Affiliate profile and account deleted successfully",
         "deleted_affiliate_id": str(affiliate.id),
-        "deleted_user_id": str(current_user.id)
+        "deleted_user_id": str(current_user.id),
+        "deleted_referrals_count": referrals_result.deleted_count,
+        "deleted_affiliate_requests_count": affiliate_request_result.deleted_count
     }
 
 

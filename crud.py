@@ -409,18 +409,26 @@ async def delete_affiliate_profile(user_id: PydanticObjectId):
     if not affiliate:
         return None
     
+    # Get the user to find their email
+    user = await models.User.find_one(models.User.id == user_id)
+    if not user:
+        return None
+    
     # Delete all referrals
     await models.Referral.find(
         models.Referral.affiliate_id == affiliate.id
+    ).delete()
+    
+    # Delete the affiliate request associated with this user's email
+    await models.AffiliateRequest.find(
+        models.AffiliateRequest.email == user.email
     ).delete()
     
     # Delete affiliate profile
     await affiliate.delete()
     
     # Delete user account
-    user = await models.User.find_one(models.User.id == user_id)
-    if user:
-        await user.delete()
+    await user.delete()
     
     return True
 
@@ -483,24 +491,88 @@ async def verify_email_token(token: str):
     
     return None
 
-async def resend_verification_email(email: str, user_type: str):
-    """Resend verification email"""
-    from auth_utils import create_verification_token, send_verification_email
+async def get_all_referrals(
+    page: int = 1, 
+    page_size: int = 20, 
+    affiliate_id: Optional[str] = None,
+    search: Optional[str] = None
+):
+    """Get all referrals across all affiliates (admin view)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+
+    from beanie import PydanticObjectId
     
-    # Check if email exists and is not verified
-    if user_type == "admin":
-        user = await models.User.find_one(models.User.email == email)
-        if not user or user.is_email_verified:
-            return False
-    elif user_type == "affiliate":
-        request = await models.AffiliateRequest.find_one(models.AffiliateRequest.email == email)
-        if not request or request.is_email_verified:
-            return False
-    elif user_type == "referral":
-        referral = await models.Referral.find_one(models.Referral.email == email)
-        if not referral:
-            return False
+    # Build query
+    query = models.Referral.find()
     
-    # Create new code and send email
-    code = await create_verification_code(email, f"{user_type}_registration")
-    return await send_verification_email(email, code, user_type)
+    # Filter by affiliate if specified
+    if affiliate_id:
+        try:
+            affiliate_object_id = PydanticObjectId(affiliate_id)
+            query = query.find(models.Referral.affiliate_id == affiliate_object_id)
+        except Exception:
+            # Invalid affiliate_id, return empty result
+            return []
+    
+    # Search functionality
+    if search:
+        search_lower = search.lower()
+        query = query.find(
+            {"$or": [
+                {"email": {"$regex": search_lower, "$options": "i"}},
+                {"full_name": {"$regex": search_lower, "$options": "i"}}
+            ]}
+        )
+    
+    referrals = await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    # Convert to response format with string IDs
+    result = []
+    for referral in referrals:
+        result.append(schemas.ReferralResponse(
+            id=str(referral.id),
+            affiliate_id=str(referral.affiliate_id),
+            unique_link=referral.unique_link,
+            full_name=referral.full_name,
+            email=referral.email,
+            timezone=referral.timezone,
+            location=referral.location,
+            headline=referral.headline,
+            bio=referral.bio,
+            broker_id=referral.broker_id,
+            invited_person=referral.invited_person,
+            find_us=referral.find_us,
+            onemove_link=referral.onemove_link,
+            created_at=referral.created_at
+        ))
+    return result
+
+async def delete_referral_by_admin(referral_id: str):
+    """Delete any referral (admin function)"""
+    from beanie import PydanticObjectId
+    
+    try:
+        referral_object_id = PydanticObjectId(referral_id)
+    except Exception:
+        return None
+    
+    referral = await models.Referral.find_one(models.Referral.id == referral_object_id)
+    if not referral:
+        return None
+    
+    # Get affiliate info before deletion for response
+    affiliate = await models.Affiliate.find_one(models.Affiliate.id == referral.affiliate_id)
+    
+    # Delete the referral
+    await referral.delete()
+    
+    return {
+        "referral": referral,
+        "affiliate": affiliate
+    }
