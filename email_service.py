@@ -35,20 +35,20 @@ class EmailService:
     def _create_verification_email(self, to_email: str, verification_code: str, user_type: str) -> MIMEMultipart:
         """Create professional verification email"""
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"Verify Your {user_type.title()} Account"
+        msg['Subject'] = f"OneMove {user_type.title()} Account Verification"
         msg['From'] = f"{self.from_name} <{self.from_email}>"
         msg['To'] = to_email
         
         # Email content
         if user_type == "admin":
-            title = "Admin Account Verification"
-            description = "Please verify your admin account to complete the registration process."
+            title = "OneMove Admin Account Verification"
+            description = "Please verify your OneMove admin account to complete the registration process."
         elif user_type == "affiliate":
-            title = "Affiliate Account Verification"
-            description = "Please verify your affiliate account to complete the registration process."
+            title = "OneMove Affiliate Account Verification"
+            description = "Please verify your OneMove affiliate account to complete the registration process."
         else:
-            title = "Account Verification"
-            description = "Please verify your account to complete the registration process."
+            title = "OneMove Account Verification"
+            description = "Please verify your OneMove account to complete the registration process."
         
         # HTML email template
         html_content = f"""
@@ -83,6 +83,10 @@ class EmailService:
                     font-weight: bold;
                     color: #2c3e50;
                     margin-bottom: 10px;
+                }}
+                .onemove-brand {{
+                    color: #007bff;
+                    font-weight: bold;
                 }}
                 .title {{
                     font-size: 20px;
@@ -126,7 +130,7 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="logo">🏢 Affiliate Management System</div>
+                    <div class="logo">🏢 <span class="onemove-brand">OneMove</span> Affiliate Management System</div>
                     <div class="title">{title}</div>
                 </div>
                 
@@ -134,7 +138,7 @@ class EmailService:
                     <p>Hello,</p>
                     <p>{description}</p>
                     
-                    <p>Your verification code is:</p>
+                    <p>Your <strong>OneMove verification code</strong> is:</p>
                     
                     <div style="text-align: center; margin: 30px 0;">
                         <div style="background-color: #f8f9fa; border: 2px solid #007bff; border-radius: 10px; padding: 20px; display: inline-block; font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #007bff; font-family: 'Courier New', monospace;">
@@ -150,7 +154,7 @@ class EmailService:
                 </div>
                 
                 <div class="footer">
-                    <p>This email was sent by the Affiliate Management System.</p>
+                    <p>This email was sent by the <strong>OneMove Affiliate Management System</strong>.</p>
                     <p>If you didn't request this verification, please ignore this email.</p>
                 </div>
             </div>
@@ -166,7 +170,7 @@ class EmailService:
         
         {description}
         
-        Your verification code is: {verification_code}
+        Your OneMove verification code is: {verification_code}
         
         This verification code will expire in 24 hours for security reasons.
         
@@ -175,7 +179,7 @@ class EmailService:
         If you didn't request this verification, please ignore this email.
         
         Best regards,
-        Affiliate Management System
+        OneMove Affiliate Management System
         """
         
         # Attach parts
@@ -208,7 +212,7 @@ class EmailService:
         """Send welcome email after successful verification"""
         try:
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = f"Welcome to Affiliate Management System"
+            msg['Subject'] = f"Welcome to OneMove Affiliate Management System"
             msg['From'] = f"{self.from_name} <{self.from_email}>"
             msg['To'] = to_email
             
@@ -261,7 +265,7 @@ class EmailService:
             <body>
                 <div class="container">
                     <div class="header">
-                        <div class="logo">✅ Welcome to Affiliate Management System</div>
+                        <div class="logo">✅ Welcome to <span class="onemove-brand">OneMove</span> Affiliate Management System</div>
                     </div>
                     
                     <div class="success">
@@ -287,7 +291,7 @@ class EmailService:
             """
             
             text_content = f"""
-            Welcome to Affiliate Management System
+            Welcome to OneMove Affiliate Management System
             
             Hello {display_name},
             
@@ -303,7 +307,7 @@ class EmailService:
             If you have any questions, please don't hesitate to contact our support team.
             
             Best regards,
-            Affiliate Management System Team
+            OneMove Affiliate Management System Team
             """
             
             text_part = MIMEText(text_content, 'plain')
