@@ -164,6 +164,11 @@ async def delete_affiliate_profile(
         models.Referral.affiliate_id == affiliate.id
     ).delete()
     
+    # Delete the affiliate request associated with this user's email
+    affiliate_request_result = await models.AffiliateRequest.find(
+        models.AffiliateRequest.email == user.email
+    ).delete()
+    
     # Delete the affiliate profile
     await affiliate.delete()
     
@@ -175,6 +180,54 @@ async def delete_affiliate_profile(
         "deleted_affiliate_id": str(affiliate.id),
         "deleted_user_id": str(user.id),
         "deleted_referrals_count": referrals_result.deleted_count,
+        "deleted_affiliate_requests_count": affiliate_request_result.deleted_count,
+        "deleted_by_admin": current_user.email,
+        "deleted_at": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/referrals", response_model=List[schemas.ReferralResponse])
+async def get_all_referrals(
+    page: int = 1,
+    page_size: int = 20,
+    affiliate_id: Optional[str] = None,
+    search: Optional[str] = None,
+    current_user: models.User = Depends(get_current_admin)
+):
+    """Get all referrals across all affiliates (admin view)"""
+    referrals = await crud.get_all_referrals(
+        page=page, 
+        page_size=page_size,
+        affiliate_id=affiliate_id,
+        search=search
+    )
+    return referrals
+
+
+@router.delete("/referrals/{referral_id}")
+async def delete_referral(
+    referral_id: str,
+    current_user: models.User = Depends(get_current_admin)
+):
+    """Delete any referral (admin function)"""
+    result = await crud.delete_referral_by_admin(referral_id)
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Referral not found"
+        )
+    
+    referral = result["referral"]
+    affiliate = result["affiliate"]
+    
+    return {
+        "message": "Referral deleted successfully",
+        "deleted_referral_id": str(referral.id),
+        "deleted_referral_email": referral.email,
+        "deleted_referral_name": referral.full_name,
+        "affiliate_id": str(affiliate.id) if affiliate else None,
+        "affiliate_name": affiliate.name if affiliate else None,
         "deleted_by_admin": current_user.email,
         "deleted_at": datetime.utcnow().isoformat()
     }

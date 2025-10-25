@@ -215,3 +215,78 @@ async def send_welcome_email(email: str, user_type: str, name: str = None) -> bo
         return True  # Skip welcome email if disabled
     
     return await email_service.send_welcome_email(email, user_type, name)
+
+async def create_password_reset_token(email: str) -> str:
+    """Create and store password reset token"""
+    token = generate_verification_token()
+    expires_at = datetime.utcnow() + timedelta(hours=24)  # 24 hours for password reset
+    
+    # Create password reset token record
+    reset_token = models.EmailVerificationToken(
+        email=email,
+        token=token,
+        token_type="password_reset",
+        expires_at=expires_at
+    )
+    await reset_token.insert()
+    
+    return token
+
+async def verify_password_reset_token(token: str) -> Optional[models.EmailVerificationToken]:
+    """Verify password reset token and return token record if valid"""
+    try:
+        # Find token
+        token_record = await models.EmailVerificationToken.find_one(
+            models.EmailVerificationToken.token == token,
+            models.EmailVerificationToken.token_type == "password_reset"
+        )
+        
+        if not token_record:
+            return None
+        
+        # Check if already used
+        if token_record.is_used:
+            return None
+        
+        # Check if expired
+        if datetime.utcnow() > token_record.expires_at:
+            return None
+        
+        return token_record
+        
+    except Exception as e:
+        print(f"Error verifying password reset token: {e}")
+        return None
+
+async def mark_password_reset_token_as_used(token_record: models.EmailVerificationToken):
+    """Mark password reset token as used"""
+    token_record.is_used = True
+    token_record.used_at = datetime.utcnow()
+    await token_record.save()
+
+async def send_password_reset_email(email: str, token: str) -> bool:
+    """Send password reset email using email service"""
+    if not settings.EMAIL_VERIFICATION_ENABLED:
+        return True  # Skip email if disabled
+    
+    return await email_service.send_password_reset_email(email, token)
+
+def validate_user_role(user, required_role: str) -> bool:
+    """Validate user role for login"""
+    if required_role == "admin":
+        return user.is_admin
+    elif required_role == "affiliate":
+        return not user.is_admin
+    else:
+        return True  # Any role allowed
+
+def get_user_type(user) -> str:
+    """Get user type string"""
+    if user.is_admin:
+        return "admin"
+    else:
+        return "affiliate"
+
+def validate_referral_user(user) -> bool:
+    """Validate if user is a referral (not admin)"""
+    return not user.is_admin

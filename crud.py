@@ -409,18 +409,26 @@ async def delete_affiliate_profile(user_id: PydanticObjectId):
     if not affiliate:
         return None
     
+    # Get the user to find their email
+    user = await models.User.find_one(models.User.id == user_id)
+    if not user:
+        return None
+    
     # Delete all referrals
     await models.Referral.find(
         models.Referral.affiliate_id == affiliate.id
+    ).delete()
+    
+    # Delete the affiliate request associated with this user's email
+    await models.AffiliateRequest.find(
+        models.AffiliateRequest.email == user.email
     ).delete()
     
     # Delete affiliate profile
     await affiliate.delete()
     
     # Delete user account
-    user = await models.User.find_one(models.User.id == user_id)
-    if user:
-        await user.delete()
+    await user.delete()
     
     return True
 
@@ -483,24 +491,169 @@ async def verify_email_token(token: str):
     
     return None
 
-async def resend_verification_email(email: str, user_type: str):
-    """Resend verification email"""
-    from auth_utils import create_verification_token, send_verification_email
+async def get_all_referrals(
+    page: int = 1, 
+    page_size: int = 20, 
+    affiliate_id: Optional[str] = None,
+    search: Optional[str] = None
+):
+    """Get all referrals across all affiliates (admin view)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+
+    from beanie import PydanticObjectId
     
-    # Check if email exists and is not verified
-    if user_type == "admin":
-        user = await models.User.find_one(models.User.email == email)
-        if not user or user.is_email_verified:
-            return False
-    elif user_type == "affiliate":
-        request = await models.AffiliateRequest.find_one(models.AffiliateRequest.email == email)
-        if not request or request.is_email_verified:
-            return False
-    elif user_type == "referral":
-        referral = await models.Referral.find_one(models.Referral.email == email)
-        if not referral:
-            return False
+    # Build query
+    query = models.Referral.find()
     
-    # Create new code and send email
-    code = await create_verification_code(email, f"{user_type}_registration")
-    return await send_verification_email(email, code, user_type)
+    # Filter by affiliate if specified
+    if affiliate_id:
+        try:
+            affiliate_object_id = PydanticObjectId(affiliate_id)
+            query = query.find(models.Referral.affiliate_id == affiliate_object_id)
+        except Exception:
+            # Invalid affiliate_id, return empty result
+            return []
+    
+    # Search functionality
+    if search:
+        search_lower = search.lower()
+        query = query.find(
+            {"$or": [
+                {"email": {"$regex": search_lower, "$options": "i"}},
+                {"full_name": {"$regex": search_lower, "$options": "i"}}
+            ]}
+        )
+    
+    referrals = await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    # Convert to response format with string IDs
+    result = []
+    for referral in referrals:
+        result.append(schemas.ReferralResponse(
+            id=str(referral.id),
+            affiliate_id=str(referral.affiliate_id),
+            unique_link=referral.unique_link,
+            full_name=referral.full_name,
+            email=referral.email,
+            timezone=referral.timezone,
+            location=referral.location,
+            headline=referral.headline,
+            bio=referral.bio,
+            broker_id=referral.broker_id,
+            invited_person=referral.invited_person,
+            find_us=referral.find_us,
+            onemove_link=referral.onemove_link,
+            created_at=referral.created_at
+        ))
+    return result
+
+async def delete_referral_by_admin(referral_id: str):
+    """Delete any referral (admin function)"""
+    from beanie import PydanticObjectId
+    
+    try:
+        referral_object_id = PydanticObjectId(referral_id)
+    except Exception:
+        return None
+    
+    referral = await models.Referral.find_one(models.Referral.id == referral_object_id)
+    if not referral:
+        return None
+    
+    # Get affiliate info before deletion for response
+    affiliate = await models.Affiliate.find_one(models.Affiliate.id == referral.affiliate_id)
+    
+    # Delete the referral
+    await referral.delete()
+    
+    return {
+        "referral": referral,
+        "affiliate": affiliate
+    }
+
+# Password reset functions
+async def request_password_reset(email: str):
+    """Request password reset for a user"""
+    # Check if user exists
+    user = await models.User.find_one(models.User.email == email)
+    if not user:
+        return None  # Don't reveal if user exists or not for security
+    
+    # Create password reset token
+    from auth_utils import create_password_reset_token, send_password_reset_email
+    token = await create_password_reset_token(email)
+    
+    # Send password reset email
+    email_sent = await send_password_reset_email(email, token)
+    if not email_sent:
+        print(f"Warning: Failed to send password reset email to {email}")
+        # Still return success to not reveal email issues
+    
+    return {
+        "email": email,
+        "token_created": True,
+        "email_sent": email_sent
+    }
+
+async def reset_password_with_token(token: str, new_password: str):
+    """Reset password using token"""
+    from auth_utils import verify_password_reset_token, mark_password_reset_token_as_used, get_password_hash
+    
+    # Verify token
+    token_record = await verify_password_reset_token(token)
+    if not token_record:
+        return None
+    
+    # Find user by email
+    user = await models.User.find_one(models.User.email == token_record.email)
+    if not user:
+        return None
+    
+    # Update password
+    user.hashed_password = get_password_hash(new_password)
+    await user.save()
+    
+    # Mark token as used
+    await mark_password_reset_token_as_used(token_record)
+    
+    return {
+        "email": user.email,
+        "password_reset": True,
+        "reset_at": datetime.utcnow()
+    }
+
+async def resend_password_reset_email(email: str):
+    """Resend password reset email"""
+    # Check if user exists
+    user = await models.User.find_one(models.User.email == email)
+    if not user:
+        return None  # Don't reveal if user exists or not for security
+    
+    # Create new password reset token (invalidate old ones)
+    from auth_utils import create_password_reset_token, send_password_reset_email
+    
+    # Invalidate any existing password reset tokens for this email
+    await models.EmailVerificationToken.find(
+        models.EmailVerificationToken.email == email,
+        models.EmailVerificationToken.token_type == "password_reset"
+    ).delete()
+    
+    # Create new token
+    token = await create_password_reset_token(email)
+    
+    # Send password reset email
+    email_sent = await send_password_reset_email(email, token)
+    if not email_sent:
+        print(f"Warning: Failed to resend password reset email to {email}")
+    
+    return {
+        "email": email,
+        "token_created": True,
+        "email_sent": email_sent
+    }
