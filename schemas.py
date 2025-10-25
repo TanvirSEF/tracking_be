@@ -125,3 +125,34 @@ class ReferralResponse(BaseModel):
 class AdminRegistrationLinkResponse(BaseModel):
     registration_link: str
     full_url: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6)
+
+class PasswordResetResponse(BaseModel):
+    message: str
+    email: str
+    expires_in_hours: int = 24
+
+class AdminLoginForm(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=1)
+
+class AffiliateLoginForm(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=1)
+
+class ReferralLoginForm(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=1)
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user_type: str
+    email: str
+    is_admin: bool

@@ -326,6 +326,196 @@ class EmailService:
         except Exception as e:
             print(f"Failed to send welcome email to {to_email}: {e}")
             return False
+    
+    async def send_password_reset_email(self, to_email: str, reset_token: str) -> bool:
+        """Send password reset email with professional template"""
+        try:
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = "OneMove Password Reset Request"
+            msg['From'] = f"{self.from_name} <{self.from_email}>"
+            msg['To'] = to_email
+            
+            # Create reset URL (you can customize this based on your frontend)
+            reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+            
+            # HTML password reset email
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Password Reset Request</title>
+                <style>
+                    body {{
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        line-height: 1.6;
+                        color: #333;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                        background-color: #f4f4f4;
+                    }}
+                    .container {{
+                        background-color: #ffffff;
+                        padding: 30px;
+                        border-radius: 10px;
+                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    }}
+                    .header {{
+                        text-align: center;
+                        margin-bottom: 30px;
+                    }}
+                    .logo {{
+                        font-size: 24px;
+                        font-weight: bold;
+                        color: #2c3e50;
+                        margin-bottom: 10px;
+                    }}
+                    .onemove-brand {{
+                        color: #007bff;
+                        font-weight: bold;
+                    }}
+                    .title {{
+                        font-size: 20px;
+                        color: #2c3e50;
+                        margin-bottom: 20px;
+                    }}
+                    .content {{
+                        margin-bottom: 30px;
+                    }}
+                    .button {{
+                        display: inline-block;
+                        background-color: #dc3545;
+                        color: white;
+                        padding: 12px 30px;
+                        text-decoration: none;
+                        border-radius: 5px;
+                        font-weight: bold;
+                        margin: 20px 0;
+                    }}
+                    .button:hover {{
+                        background-color: #c82333;
+                    }}
+                    .footer {{
+                        margin-top: 30px;
+                        padding-top: 20px;
+                        border-top: 1px solid #eee;
+                        font-size: 12px;
+                        color: #666;
+                        text-align: center;
+                    }}
+                    .warning {{
+                        background-color: #fff3cd;
+                        border: 1px solid #ffeaa7;
+                        color: #856404;
+                        padding: 15px;
+                        border-radius: 5px;
+                        margin: 20px 0;
+                    }}
+                    .token-display {{
+                        background-color: #f8f9fa;
+                        border: 2px solid #dc3545;
+                        border-radius: 10px;
+                        padding: 20px;
+                        text-align: center;
+                        font-size: 18px;
+                        font-weight: bold;
+                        letter-spacing: 3px;
+                        color: #dc3545;
+                        font-family: 'Courier New', monospace;
+                        margin: 20px 0;
+                        word-break: break-all;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div class="logo">🔐 <span class="onemove-brand">OneMove</span> Password Reset</div>
+                        <div class="title">Password Reset Request</div>
+                    </div>
+                    
+                    <div class="content">
+                        <p>Hello,</p>
+                        <p>We received a request to reset your password for your OneMove account.</p>
+                        
+                        <p>To reset your password, please use the following reset token:</p>
+                        
+                        <div class="token-display">
+                            {reset_token}
+                        </div>
+                        
+                        <p>Or click the button below to reset your password:</p>
+                        
+                        <div style="text-align: center;">
+                            <a href="{reset_url}" class="button">Reset My Password</a>
+                        </div>
+                        
+                        <div class="warning">
+                            <strong>⚠️ Important Security Information:</strong>
+                            <ul>
+                                <li>This reset token will expire in 24 hours</li>
+                                <li>This token can only be used once</li>
+                                <li>If you didn't request this reset, please ignore this email</li>
+                                <li>Your password will remain unchanged until you use this token</li>
+                            </ul>
+                        </div>
+                        
+                        <p>If you have any questions or concerns, please contact our support team immediately.</p>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>This email was sent by the <strong>OneMove Affiliate Management System</strong>.</p>
+                        <p>If you didn't request this password reset, please ignore this email and your password will remain unchanged.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Plain text version
+            text_content = f"""
+            OneMove Password Reset Request
+            
+            Hello,
+            
+            We received a request to reset your password for your OneMove account.
+            
+            To reset your password, please use the following reset token:
+            
+            {reset_token}
+            
+            Or visit this link: {reset_url}
+            
+            IMPORTANT SECURITY INFORMATION:
+            - This reset token will expire in 24 hours
+            - This token can only be used once
+            - If you didn't request this reset, please ignore this email
+            - Your password will remain unchanged until you use this token
+            
+            If you have any questions or concerns, please contact our support team immediately.
+            
+            This email was sent by the OneMove Affiliate Management System.
+            If you didn't request this password reset, please ignore this email and your password will remain unchanged.
+            """
+            
+            text_part = MIMEText(text_content, 'plain')
+            html_part = MIMEText(html_content, 'html')
+            
+            msg.attach(text_part)
+            msg.attach(html_part)
+            
+            # Send email
+            with self._create_smtp_connection() as server:
+                server.send_message(msg)
+            
+            print(f"Password reset email sent to {to_email}")
+            return True
+            
+        except Exception as e:
+            print(f"Failed to send password reset email to {to_email}: {e}")
+            return False
 
 # Global email service instance
 email_service = EmailService()

@@ -576,3 +576,84 @@ async def delete_referral_by_admin(referral_id: str):
         "referral": referral,
         "affiliate": affiliate
     }
+
+# Password reset functions
+async def request_password_reset(email: str):
+    """Request password reset for a user"""
+    # Check if user exists
+    user = await models.User.find_one(models.User.email == email)
+    if not user:
+        return None  # Don't reveal if user exists or not for security
+    
+    # Create password reset token
+    from auth_utils import create_password_reset_token, send_password_reset_email
+    token = await create_password_reset_token(email)
+    
+    # Send password reset email
+    email_sent = await send_password_reset_email(email, token)
+    if not email_sent:
+        print(f"Warning: Failed to send password reset email to {email}")
+        # Still return success to not reveal email issues
+    
+    return {
+        "email": email,
+        "token_created": True,
+        "email_sent": email_sent
+    }
+
+async def reset_password_with_token(token: str, new_password: str):
+    """Reset password using token"""
+    from auth_utils import verify_password_reset_token, mark_password_reset_token_as_used, get_password_hash
+    
+    # Verify token
+    token_record = await verify_password_reset_token(token)
+    if not token_record:
+        return None
+    
+    # Find user by email
+    user = await models.User.find_one(models.User.email == token_record.email)
+    if not user:
+        return None
+    
+    # Update password
+    user.hashed_password = get_password_hash(new_password)
+    await user.save()
+    
+    # Mark token as used
+    await mark_password_reset_token_as_used(token_record)
+    
+    return {
+        "email": user.email,
+        "password_reset": True,
+        "reset_at": datetime.utcnow()
+    }
+
+async def resend_password_reset_email(email: str):
+    """Resend password reset email"""
+    # Check if user exists
+    user = await models.User.find_one(models.User.email == email)
+    if not user:
+        return None  # Don't reveal if user exists or not for security
+    
+    # Create new password reset token (invalidate old ones)
+    from auth_utils import create_password_reset_token, send_password_reset_email
+    
+    # Invalidate any existing password reset tokens for this email
+    await models.EmailVerificationToken.find(
+        models.EmailVerificationToken.email == email,
+        models.EmailVerificationToken.token_type == "password_reset"
+    ).delete()
+    
+    # Create new token
+    token = await create_password_reset_token(email)
+    
+    # Send password reset email
+    email_sent = await send_password_reset_email(email, token)
+    if not email_sent:
+        print(f"Warning: Failed to resend password reset email to {email}")
+    
+    return {
+        "email": email,
+        "token_created": True,
+        "email_sent": email_sent
+    }
