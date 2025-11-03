@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: Optional[str] = None
     BASE_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "https://onboard.1move.online"
+    RESET_PASSWORD_URL: str = "https://1board.1move.online/reset-password"
     # Comma-separated list, e.g. "http://localhost:3000,http://localhost:8000"
     CORS_ORIGINS: str = "*"
     
