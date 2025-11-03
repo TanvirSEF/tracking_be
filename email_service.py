@@ -160,7 +160,7 @@ class EmailService:
             msg['To'] = to_email
             
             # Create reset URL (you can customize this based on your frontend)
-            reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+            reset_url = f"{settings.RESET_PASSWORD_URL}?token={reset_token}"
             
             # HTML password reset email
             html_content = f"""
