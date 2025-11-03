@@ -3,7 +3,7 @@ from datetime import datetime
 
 import models
 import schemas
-from auth_utils import get_password_hash, verify_password, generate_unique_affiliate_link, create_verification_token, create_verification_code, send_verification_email, send_welcome_email
+from auth_utils import get_password_hash, verify_password, generate_unique_affiliate_link, send_welcome_email
 from config import settings
 from beanie import PydanticObjectId
 from typing import Optional
@@ -38,14 +38,15 @@ async def create_admin_user(email: str, password: str):
             email=email,
             hashed_password=hashed_password,
             is_admin=True,
-            is_email_verified=not settings.EMAIL_VERIFICATION_ENABLED  # Auto-verify if email verification disabled
+            is_email_verified=True  # Auto-verify emails (OTP verification removed)
         )
         await admin.insert()
         
-        # Send verification email if enabled
-        if settings.EMAIL_VERIFICATION_ENABLED:
-            code = await create_verification_code(email, "admin_registration")
-            await send_verification_email(email, code, "admin")
+        # Send welcome email
+        try:
+            await send_welcome_email(email, "admin", email.split('@')[0])
+        except Exception as e:
+            print(f"Warning: Failed to send welcome email to {email}: {e}")
     return admin
 
 async def get_admin_registration_link():
@@ -83,14 +84,9 @@ async def create_affiliate_request(request: schemas.AffiliateRequestCreate):
         language=request.language,
         onemove_link=request.onemove_link,
         puprime_link=request.puprime_link,
-        is_email_verified=not settings.EMAIL_VERIFICATION_ENABLED  # Auto-verify if email verification disabled
+        is_email_verified=True  # Auto-verify emails (OTP verification removed)
     )
     await affiliate_request.insert()
-    
-    # Send verification email if enabled
-    if settings.EMAIL_VERIFICATION_ENABLED:
-        code = await create_verification_code(request.email, "affiliate_registration")
-        await send_verification_email(request.email, code, "affiliate")
     
     # Return response format with string ID
     return schemas.AffiliateRequestResponse(
@@ -193,14 +189,7 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
         print(f"DEBUG: Request not found or not pending. Request: {request}, Status: {request.status if request else 'None'}")
         return None
     
-    # Check if email is verified (only if email verification is enabled)
-    if settings.EMAIL_VERIFICATION_ENABLED and not request.is_email_verified:
-        # For now, auto-verify if email verification is not working
-        print(f"Auto-verifying email for {request.email} due to verification issues")
-        request.is_email_verified = True
-        await request.save()
-    
-    # Create user account
+    # Create user account (emails are auto-verified, OTP verification removed)
     user = models.User(
         email=request.email,
         hashed_password=request.hashed_password,
@@ -338,10 +327,11 @@ async def create_referral_registration(unique_link: str, registration_data: sche
     )
     await referral.insert()
     
-    # Send verification email if enabled
-    if settings.EMAIL_VERIFICATION_ENABLED:
-        code = await create_verification_code(registration_data.email, "referral_registration")
-        await send_verification_email(registration_data.email, code, "referral")
+    # Send welcome email after referral registration
+    try:
+        await send_welcome_email(registration_data.email, "referral", registration_data.full_name)
+    except Exception as e:
+        print(f"Warning: Failed to send welcome email to {registration_data.email}: {e}")
     
     # Return response format with string IDs
     return schemas.ReferralResponse(
@@ -443,53 +433,6 @@ async def delete_referral_by_id(referral_id: str, affiliate_id: str):
     
     await referral.delete()
     return True
-
-# Email verification functions
-async def verify_email_token(token: str):
-    """Verify email token and activate account"""
-    from auth_utils import verify_email_token as verify_token, mark_token_as_used, send_welcome_email
-    
-    # Verify token
-    token_record = await verify_token(token)
-    if not token_record:
-        return None
-    
-    # Mark token as used
-    await mark_token_as_used(token_record)
-    
-    # Handle different token types
-    if token_record.token_type == "admin_registration":
-        # Verify admin user
-        user = await models.User.find_one(models.User.email == token_record.email)
-        if user:
-            user.is_email_verified = True
-            await user.save()
-            await send_welcome_email(user.email, "admin", user.email.split('@')[0])
-            return {"type": "admin", "user": user}
-    
-    elif token_record.token_type == "affiliate_registration":
-        # Verify affiliate request
-        request = await models.AffiliateRequest.find_one(models.AffiliateRequest.email == token_record.email)
-        if request:
-            request.is_email_verified = True
-            await request.save()
-            try:
-                await send_welcome_email(request.email, "affiliate", request.name)
-            except Exception as e:
-                print(f"Warning: Failed to send welcome email to {request.email}: {e}")
-            return {"type": "affiliate_request", "request": request}
-    
-    elif token_record.token_type == "referral_registration":
-        # Verify referral
-        referral = await models.Referral.find_one(models.Referral.email == token_record.email)
-        if referral:
-            try:
-                await send_welcome_email(referral.email, "referral", referral.full_name)
-            except Exception as e:
-                print(f"Warning: Failed to send welcome email to {referral.email}: {e}")
-            return {"type": "referral", "referral": referral}
-    
-    return None
 
 async def get_all_referrals(
     page: int = 1, 
