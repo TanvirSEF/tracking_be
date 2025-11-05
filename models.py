@@ -1,10 +1,9 @@
 from beanie import Document, PydanticObjectId
-from pydantic import Field
+from pydantic import Field, ConfigDict
 from typing import Optional
 from datetime import datetime, timedelta
 from enum import Enum
 import secrets
-from typing import Optional
 
 class RequestStatus(str, Enum):
     PENDING = "pending"
@@ -23,12 +22,14 @@ class User(Document):
         name = "users"
 
 class AffiliateRequest(Document):
+    model_config = ConfigDict(populate_by_name=True)
+    
     name: str
     email: str = Field(..., unique=True, index=True)
     hashed_password: str
     location: str
     language: str
-    onemove_link: str
+    puprime_referral_code: Optional[str] = Field(None, alias="onemove_link", serialization_alias="onemove_link")
     puprime_link: str
     status: RequestStatus = Field(default=RequestStatus.PENDING)
     is_email_verified: bool = Field(default=False)
@@ -40,11 +41,13 @@ class AffiliateRequest(Document):
         name = "affiliate_requests"
 
 class Affiliate(Document):
+    model_config = ConfigDict(populate_by_name=True)
+    
     user_id: PydanticObjectId = Field(..., unique=True, index=True)
     name: str
     location: str
     language: str
-    onemove_link: str
+    puprime_referral_code: Optional[str] = Field(None, alias="onemove_link", serialization_alias="onemove_link")
     puprime_link: str
     unique_link: str = Field(..., unique=True, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -66,6 +69,7 @@ class Referral(Document):
     invited_person: str
     find_us: str
     onemove_link: Optional[str] = None
+    puprime_verification: Optional[bool] = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
@@ -82,6 +86,17 @@ class EmailVerificationToken(Document):
 
     class Settings:
         name = "email_verification_tokens"
+
+class AffiliateNote(Document):
+    affiliate_id: PydanticObjectId = Field(..., index=True)  # Which affiliate created the note
+    referral_id: PydanticObjectId = Field(..., index=True)   # Which referral the note is about
+    title: str
+    note: str  # The note content
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Settings:
+        name = "affiliate_notes"
 
 class SystemConfig(Document):
     admin_registration_link: str = Field(..., unique=True)

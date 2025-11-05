@@ -30,7 +30,7 @@ class AffiliateRequestCreate(BaseModel):
     password: str = Field(..., min_length=6)
     location: str = Field(..., min_length=1, max_length=255)
     language: str = Field(..., min_length=1, max_length=100)
-    onemove_link: str = Field(..., min_length=1)
+    puprime_referral_code: str = Field(..., min_length=1)
     puprime_link: str = Field(..., min_length=1)
     
     @validator('name', 'location', 'language')
@@ -43,7 +43,7 @@ class AffiliateRequestResponse(BaseModel):
     email: str
     location: str
     language: str
-    onemove_link: str
+    puprime_referral_code: Optional[str] = None
     puprime_link: str
     status: RequestStatus
     is_email_verified: bool
@@ -60,13 +60,27 @@ class AffiliateResponse(BaseModel):
     email: str
     location: str
     language: str
-    onemove_link: str
+    puprime_referral_code: Optional[str] = None
     puprime_link: str
     unique_link: str
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+class AffiliateProfileUpdate(BaseModel):
+    """Schema for updating affiliate profile"""
+    name: str = Field(..., min_length=1, max_length=255)
+    location: str = Field(..., min_length=1, max_length=255)
+    language: str = Field(..., min_length=1, max_length=100)
+    puprime_referral_code: str = Field(..., min_length=1)
+    puprime_link: str = Field(..., min_length=1)
+    
+    @validator('name', 'location', 'language', 'puprime_referral_code', 'puprime_link')
+    def strip_whitespace(cls, v):
+        if v is not None:
+            return v.strip()
+        return v
 
 class Token(BaseModel):
     access_token: str
@@ -117,6 +131,7 @@ class ReferralResponse(BaseModel):
     invited_person: str
     find_us: str
     onemove_link: str
+    puprime_verification: bool
     created_at: datetime
 
     class Config:
@@ -156,3 +171,72 @@ class LoginResponse(BaseModel):
     user_type: str
     email: str
     is_admin: bool
+
+class AdminCreateRequest(BaseModel):
+    """Schema for creating a new admin user"""
+    email: EmailStr
+    password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
+
+class AdminCreateResponse(BaseModel):
+    """Response schema for admin creation"""
+    message: str
+    admin_id: str
+    email: str
+    is_admin: bool
+    is_active: bool
+    created_at: datetime
+    created_by: str  # Email of the admin who created this admin
+
+class AdminResponse(BaseModel):
+    """Schema for admin user information"""
+    id: str
+    email: str
+    is_admin: bool
+    is_active: bool
+    is_email_verified: bool
+    created_at: datetime
+
+class NoteCreate(BaseModel):
+    """Schema for creating a note"""
+    title: str = Field(..., min_length=1, max_length=200)
+    note: str = Field(..., min_length=1, max_length=5000)
+    
+    @validator('title', 'note')
+    def strip_whitespace(cls, v):
+        return v.strip()
+
+class NoteUpdate(BaseModel):
+    """Schema for updating a note"""
+    title: str = Field(..., min_length=1, max_length=200)
+    note: str = Field(..., min_length=1, max_length=5000)
+    
+    @validator('title', 'note')
+    def strip_whitespace(cls, v):
+        return v.strip()
+
+class NoteResponse(BaseModel):
+    """Schema for note responses"""
+    id: str
+    affiliate_id: str
+    referral_id: str
+    title: str
+    note: str
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class TopAffiliateResponse(BaseModel):
+    """Schema for top affiliate by referral count"""
+    id: str
+    name: str
+    email: str
+    location: str
+    language: str
+    unique_link: str
+    referral_count: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

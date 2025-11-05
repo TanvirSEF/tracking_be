@@ -82,7 +82,7 @@ async def create_affiliate_request(request: schemas.AffiliateRequestCreate):
         hashed_password=hashed_password,
         location=request.location,
         language=request.language,
-        onemove_link=request.onemove_link,
+        puprime_referral_code=request.puprime_referral_code,
         puprime_link=request.puprime_link,
         is_email_verified=True  # Auto-verify emails (OTP verification removed)
     )
@@ -95,7 +95,7 @@ async def create_affiliate_request(request: schemas.AffiliateRequestCreate):
         email=affiliate_request.email,
         location=affiliate_request.location,
         language=affiliate_request.language,
-        onemove_link=affiliate_request.onemove_link,
+        puprime_referral_code=affiliate_request.puprime_referral_code,
         puprime_link=affiliate_request.puprime_link,
         status=affiliate_request.status,
         is_email_verified=affiliate_request.is_email_verified,
@@ -118,7 +118,7 @@ async def get_pending_requests():
             email=request.email,
             location=request.location,
             language=request.language,
-            onemove_link=request.onemove_link,
+            puprime_referral_code=request.puprime_referral_code,
             puprime_link=request.puprime_link,
             status=request.status,
             is_email_verified=request.is_email_verified,
@@ -156,7 +156,7 @@ async def get_all_requests(
             email=request.email,
             location=request.location,
             language=request.language,
-            onemove_link=request.onemove_link,
+            puprime_referral_code=request.puprime_referral_code,
             puprime_link=request.puprime_link,
             status=request.status,
             is_email_verified=request.is_email_verified,
@@ -217,7 +217,7 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
         name=request.name,
         location=request.location,
         language=request.language,
-        onemove_link=request.onemove_link,
+        puprime_referral_code=request.puprime_referral_code,
         puprime_link=request.puprime_link,
         unique_link=unique_link
     )
@@ -275,6 +275,25 @@ async def authenticate_user(email: str, password: str):
 async def get_affiliate_by_user(user_id: PydanticObjectId):
     """Get affiliate profile by user ID"""
     return await models.Affiliate.find_one(models.Affiliate.user_id == user_id)
+
+async def update_affiliate_profile(user_id: PydanticObjectId, update_data: schemas.AffiliateProfileUpdate):
+    """Update affiliate profile information"""
+    # Get the affiliate by user_id
+    affiliate = await models.Affiliate.find_one(models.Affiliate.user_id == user_id)
+    if not affiliate:
+        return None
+    
+    # Update the fields
+    affiliate.name = update_data.name
+    affiliate.location = update_data.location
+    affiliate.language = update_data.language
+    affiliate.puprime_referral_code = update_data.puprime_referral_code
+    affiliate.puprime_link = update_data.puprime_link
+    
+    # Save the changes
+    await affiliate.save()
+    
+    return affiliate
 
 async def get_all_affiliates(page: int = 1, page_size: int = 20):
     """Get all approved affiliates (paginated)"""
@@ -348,6 +367,7 @@ async def create_referral_registration(unique_link: str, registration_data: sche
         invited_person=referral.invited_person,
         find_us=referral.find_us,
         onemove_link=referral.onemove_link,
+        puprime_verification=referral.puprime_verification if referral.puprime_verification is not None else False,
         created_at=referral.created_at
     )
 
@@ -383,6 +403,7 @@ async def get_referrals_by_affiliate(affiliate_id: str, page: int = 1, page_size
             invited_person=referral.invited_person,
             find_us=referral.find_us,
             onemove_link=referral.onemove_link,
+            puprime_verification=referral.puprime_verification if referral.puprime_verification is not None else False,
             created_at=referral.created_at
         ))
     return result
@@ -492,6 +513,7 @@ async def get_all_referrals(
             invited_person=referral.invited_person,
             find_us=referral.find_us,
             onemove_link=referral.onemove_link,
+            puprime_verification=referral.puprime_verification if referral.puprime_verification is not None else False,
             created_at=referral.created_at
         ))
     return result
@@ -600,3 +622,199 @@ async def resend_password_reset_email(email: str):
         "token_created": True,
         "email_sent": email_sent
     }
+
+# ==================== Affiliate Notes CRUD Functions ====================
+
+async def create_affiliate_note(affiliate_id: str, referral_id: str, note_data: schemas.NoteCreate):
+    """Create a new note for a referral"""
+    from beanie import PydanticObjectId
+    
+    # Verify referral exists and belongs to this affiliate
+    referral = await models.Referral.find_one(
+        models.Referral.id == PydanticObjectId(referral_id)
+    )
+    if not referral:
+        return None
+    
+    if str(referral.affiliate_id) != affiliate_id:
+        return None  # Referral doesn't belong to this affiliate
+    
+    # Create the note
+    note = models.AffiliateNote(
+        affiliate_id=PydanticObjectId(affiliate_id),
+        referral_id=PydanticObjectId(referral_id),
+        title=note_data.title,
+        note=note_data.note
+    )
+    await note.insert()
+    
+    return schemas.NoteResponse(
+        id=str(note.id),
+        affiliate_id=str(note.affiliate_id),
+        referral_id=str(note.referral_id),
+        title=note.title,
+        note=note.note,
+        created_at=note.created_at,
+        updated_at=note.updated_at
+    )
+
+async def get_notes_by_referral(affiliate_id: str, referral_id: str):
+    """Get all notes for a specific referral (by that affiliate)"""
+    from beanie import PydanticObjectId
+    
+    # Verify referral belongs to affiliate
+    referral = await models.Referral.find_one(
+        models.Referral.id == PydanticObjectId(referral_id)
+    )
+    if not referral or str(referral.affiliate_id) != affiliate_id:
+        return None  # Unauthorized or not found
+    
+    # Get all notes
+    notes = await models.AffiliateNote.find(
+        models.AffiliateNote.affiliate_id == PydanticObjectId(affiliate_id),
+        models.AffiliateNote.referral_id == PydanticObjectId(referral_id)
+    ).sort("-created_at").to_list()
+    
+    result = []
+    for note in notes:
+        result.append(schemas.NoteResponse(
+            id=str(note.id),
+            affiliate_id=str(note.affiliate_id),
+            referral_id=str(note.referral_id),
+            title=note.title,
+            note=note.note,
+            created_at=note.created_at,
+            updated_at=note.updated_at
+        ))
+    return result
+
+async def get_all_notes_by_affiliate(affiliate_id: str, page: int = 1, page_size: int = 50):
+    """Get all notes created by an affiliate (across all referrals)"""
+    from beanie import PydanticObjectId
+    
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+    
+    notes = await models.AffiliateNote.find(
+        models.AffiliateNote.affiliate_id == PydanticObjectId(affiliate_id)
+    ).sort("-updated_at").skip(skip).limit(page_size).to_list()
+    
+    result = []
+    for note in notes:
+        result.append(schemas.NoteResponse(
+            id=str(note.id),
+            affiliate_id=str(note.affiliate_id),
+            referral_id=str(note.referral_id),
+            title=note.title,
+            note=note.note,
+            created_at=note.created_at,
+            updated_at=note.updated_at
+        ))
+    return result
+
+async def update_affiliate_note(note_id: str, affiliate_id: str, note_data: schemas.NoteUpdate):
+    """Update an existing note"""
+    from beanie import PydanticObjectId
+    
+    # Find the note
+    note = await models.AffiliateNote.find_one(
+        models.AffiliateNote.id == PydanticObjectId(note_id)
+    )
+    
+    if not note:
+        return None
+    
+    # Verify note belongs to this affiliate
+    if str(note.affiliate_id) != affiliate_id:
+        return None  # Unauthorized
+    
+    # Update the note
+    note.title = note_data.title
+    note.note = note_data.note
+    note.updated_at = datetime.utcnow()
+    await note.save()
+    
+    return schemas.NoteResponse(
+        id=str(note.id),
+        affiliate_id=str(note.affiliate_id),
+        referral_id=str(note.referral_id),
+        title=note.title,
+        note=note.note,
+        created_at=note.created_at,
+        updated_at=note.updated_at
+    )
+
+async def delete_affiliate_note(note_id: str, affiliate_id: str):
+    """Delete a note"""
+    from beanie import PydanticObjectId
+    
+    # Find the note
+    note = await models.AffiliateNote.find_one(
+        models.AffiliateNote.id == PydanticObjectId(note_id)
+    )
+    
+    if not note:
+        return None
+    
+    # Verify note belongs to this affiliate
+    if str(note.affiliate_id) != affiliate_id:
+        return None  # Unauthorized
+    
+    # Delete the note
+    await note.delete()
+    return True
+
+# ==================== Top Affiliates Analytics ====================
+
+async def get_top_affiliates_by_referrals(limit: int = 10):
+    """Get top affiliates ranked by referral count"""
+    from beanie import PydanticObjectId
+    
+    # Get all affiliates
+    affiliates = await models.Affiliate.find().to_list()
+    
+    # For each affiliate, get referral count
+    affiliate_stats = []
+    for affiliate in affiliates:
+        count = await models.Referral.find(
+            models.Referral.affiliate_id == affiliate.id
+        ).count()
+        
+        # Get user email
+        user = await models.User.find_one(
+            models.User.id == affiliate.user_id
+        )
+        
+        if user and user.is_active:
+            affiliate_stats.append({
+                "affiliate": affiliate,
+                "user": user,
+                "count": count
+            })
+    
+    # Sort by count descending
+    affiliate_stats.sort(key=lambda x: x["count"], reverse=True)
+    
+    # Take top N
+    top_affiliates = affiliate_stats[:limit]
+    
+    # Build response
+    result = []
+    for stat in top_affiliates:
+        result.append(schemas.TopAffiliateResponse(
+            id=str(stat["affiliate"].id),
+            name=stat["affiliate"].name,
+            email=stat["user"].email,
+            location=stat["affiliate"].location,
+            language=stat["affiliate"].language,
+            unique_link=f"{settings.BASE_URL}/ref/{stat['affiliate'].unique_link}",
+            referral_count=stat["count"],
+            created_at=stat["affiliate"].created_at
+        ))
+    
+    return result
