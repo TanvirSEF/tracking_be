@@ -126,6 +126,38 @@ async def get_admin_user(current_user: models.User = Depends(get_current_user)):
         )
     return current_user
 
+async def get_current_referral(token: str = None):
+    """Get current referral/member from JWT token"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    if not token:
+        raise credentials_exception
+        
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        user_type: str = payload.get("user_type")
+        if email is None or user_type != "referral":
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    try:
+        referral = await models.Referral.find_one(models.Referral.email == email)
+        if referral is None:
+            raise credentials_exception
+        return referral
+    except Exception as e:
+        print(f"Database error during referral lookup: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable"
+        )
+
 def generate_unique_affiliate_link():
     """Generate a unique link for affiliates"""
     characters = string.ascii_letters + string.digits

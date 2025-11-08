@@ -272,6 +272,17 @@ async def authenticate_user(email: str, password: str):
         print(f"Database error during authentication: {e}")
         return None
 
+async def authenticate_referral(email: str, password: str):
+    """Authenticate a referral/member"""
+    try:
+        referral = await models.Referral.find_one(models.Referral.email == email)
+        if not referral or not verify_password(password, referral.hashed_password):
+            return None
+        return referral
+    except Exception as e:
+        print(f"Database error during referral authentication: {e}")
+        return None
+
 async def get_affiliate_by_user(user_id: PydanticObjectId):
     """Get affiliate profile by user ID"""
     return await models.Affiliate.find_one(models.Affiliate.user_id == user_id)
@@ -541,6 +552,112 @@ async def delete_referral_by_admin(referral_id: str):
         "referral": referral,
         "affiliate": affiliate
     }
+
+async def get_referral_by_id(referral_id: PydanticObjectId):
+    """Get referral profile by referral ID"""
+    referral = await models.Referral.find_one(models.Referral.id == referral_id)
+    if not referral:
+        return None
+    
+    return schemas.ReferralResponse(
+        id=str(referral.id),
+        affiliate_id=str(referral.affiliate_id),
+        unique_link=referral.unique_link,
+        full_name=referral.full_name,
+        email=referral.email,
+        timezone=referral.timezone,
+        location=referral.location,
+        headline=referral.headline,
+        bio=referral.bio,
+        broker_id=referral.broker_id,
+        invited_person=referral.invited_person,
+        find_us=referral.find_us,
+        onemove_link=referral.onemove_link,
+        puprime_verification=referral.puprime_verification if referral.puprime_verification is not None else False,
+        created_at=referral.created_at
+    )
+
+async def update_referral_profile(referral_id: PydanticObjectId, update_data: schemas.ReferralProfileUpdate):
+    """Update referral profile information"""
+    referral = await models.Referral.find_one(models.Referral.id == referral_id)
+    if not referral:
+        return None
+    
+    # Update only provided fields
+    update_dict = update_data.dict(exclude_unset=True)
+    
+    for field, value in update_dict.items():
+        setattr(referral, field, value)
+    
+    await referral.save()
+    
+    return schemas.ReferralResponse(
+        id=str(referral.id),
+        affiliate_id=str(referral.affiliate_id),
+        unique_link=referral.unique_link,
+        full_name=referral.full_name,
+        email=referral.email,
+        timezone=referral.timezone,
+        location=referral.location,
+        headline=referral.headline,
+        bio=referral.bio,
+        broker_id=referral.broker_id,
+        invited_person=referral.invited_person,
+        find_us=referral.find_us,
+        onemove_link=referral.onemove_link,
+        puprime_verification=referral.puprime_verification if referral.puprime_verification is not None else False,
+        created_at=referral.created_at
+    )
+
+async def delete_referral_profile(referral_id: PydanticObjectId):
+    """Delete referral profile"""
+    referral = await models.Referral.find_one(models.Referral.id == referral_id)
+    if not referral:
+        return None
+    
+    # Delete all notes associated with this referral
+    notes_result = await models.AffiliateNote.find(
+        models.AffiliateNote.referral_id == referral_id
+    ).delete()
+    
+    # Get affiliate info before deletion
+    affiliate = await models.Affiliate.find_one(models.Affiliate.id == referral.affiliate_id)
+    
+    # Delete the referral
+    await referral.delete()
+    
+    return {
+        "referral": referral,
+        "affiliate": affiliate,
+        "deleted_notes_count": notes_result.deleted_count if notes_result else 0
+    }
+
+async def get_affiliate_by_referral(referral_id: PydanticObjectId):
+    """Get affiliate information for a specific referral"""
+    referral = await models.Referral.find_one(models.Referral.id == referral_id)
+    if not referral:
+        return None
+    
+    affiliate = await models.Affiliate.find_one(models.Affiliate.id == referral.affiliate_id)
+    if not affiliate:
+        return None
+    
+    # Get user info for email
+    user = await models.User.find_one(models.User.id == affiliate.user_id)
+    if not user:
+        return None
+    
+    return schemas.AffiliateResponse(
+        id=str(affiliate.id),
+        name=affiliate.name,
+        email=user.email,
+        location=affiliate.location,
+        language=affiliate.language,
+        puprime_referral_code=affiliate.puprime_referral_code,
+        puprime_link=affiliate.puprime_link,
+        unique_link=affiliate.unique_link,
+        created_at=affiliate.created_at
+    )
 
 # Password reset functions
 async def request_password_reset(email: str):
@@ -818,3 +935,430 @@ async def get_top_affiliates_by_referrals(limit: int = 10):
         ))
     
     return result
+
+# ==================== Support Ticket CRUD Functions ====================
+
+async def create_support_ticket(
+    ticket_type: models.TicketType,
+    creator_id: PydanticObjectId,
+    creator_email: str,
+    creator_name: str,
+    subject: str,
+    message: str,
+    priority: models.TicketPriority,
+    image_url: Optional[str] = None,
+    assigned_to_id: Optional[PydanticObjectId] = None
+):
+    """Create a new support ticket"""
+    ticket = models.SupportTicket(
+        ticket_type=ticket_type,
+        creator_id=creator_id,
+        creator_email=creator_email,
+        creator_name=creator_name,
+        assigned_to_id=assigned_to_id,
+        subject=subject,
+        message=message,
+        priority=priority,
+        image_url=image_url
+    )
+    await ticket.insert()
+    return ticket
+
+async def get_ticket_by_id(ticket_id: str) -> Optional[models.SupportTicket]:
+    """Get a ticket by ID"""
+    try:
+        ticket = await models.SupportTicket.get(PydanticObjectId(ticket_id))
+        return ticket
+    except Exception:
+        return None
+
+async def get_tickets_for_admin(
+    status: Optional[models.TicketStatus] = None,
+    priority: Optional[models.TicketPriority] = None,
+    page: int = 1,
+    page_size: int = 20
+):
+    """Get all affiliate->admin tickets (for admin view)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+    
+    query = models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN
+    )
+    
+    if status:
+        query = query.find(models.SupportTicket.status == status)
+    if priority:
+        query = query.find(models.SupportTicket.priority == priority)
+    
+    # Sort by priority (high->medium->average) then by created_at (newest first)
+    tickets = await query.sort([
+        ("status", 1),  # Open first
+        ("-priority", 1),  # High priority first
+        ("-created_at", 1)  # Newest first
+    ]).skip(skip).limit(page_size).to_list()
+    
+    # Get reply count for each ticket
+    result = []
+    for ticket in tickets:
+        reply_count = await models.TicketReply.find(
+            models.TicketReply.ticket_id == ticket.id
+        ).count()
+        
+        ticket_dict = ticket.dict()
+        ticket_dict['id'] = str(ticket.id)
+        ticket_dict['creator_id'] = str(ticket.creator_id)
+        ticket_dict['assigned_to_id'] = str(ticket.assigned_to_id) if ticket.assigned_to_id else None
+        ticket_dict['reply_count'] = reply_count
+        result.append(ticket_dict)
+    
+    return result
+
+async def get_tickets_by_affiliate(
+    affiliate_id: str,
+    status: Optional[models.TicketStatus] = None,
+    page: int = 1,
+    page_size: int = 20
+):
+    """Get tickets created by a specific affiliate (to admin)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+    
+    query = models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.creator_id == PydanticObjectId(affiliate_id)
+    )
+    
+    if status:
+        query = query.find(models.SupportTicket.status == status)
+    
+    tickets = await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    # Get reply count for each ticket
+    result = []
+    for ticket in tickets:
+        reply_count = await models.TicketReply.find(
+            models.TicketReply.ticket_id == ticket.id
+        ).count()
+        
+        ticket_dict = ticket.dict()
+        ticket_dict['id'] = str(ticket.id)
+        ticket_dict['creator_id'] = str(ticket.creator_id)
+        ticket_dict['assigned_to_id'] = str(ticket.assigned_to_id) if ticket.assigned_to_id else None
+        ticket_dict['reply_count'] = reply_count
+        result.append(ticket_dict)
+    
+    return result
+
+async def get_member_tickets_for_affiliate(
+    affiliate_id: str,
+    status: Optional[models.TicketStatus] = None,
+    priority: Optional[models.TicketPriority] = None,
+    page: int = 1,
+    page_size: int = 20
+):
+    """Get tickets from members assigned to a specific affiliate"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+    
+    query = models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.MEMBER_TO_AFFILIATE,
+        models.SupportTicket.assigned_to_id == PydanticObjectId(affiliate_id)
+    )
+    
+    if status:
+        query = query.find(models.SupportTicket.status == status)
+    if priority:
+        query = query.find(models.SupportTicket.priority == priority)
+    
+    tickets = await query.sort([
+        ("status", 1),
+        ("-priority", 1),
+        ("-created_at", 1)
+    ]).skip(skip).limit(page_size).to_list()
+    
+    # Get reply count for each ticket
+    result = []
+    for ticket in tickets:
+        reply_count = await models.TicketReply.find(
+            models.TicketReply.ticket_id == ticket.id
+        ).count()
+        
+        ticket_dict = ticket.dict()
+        ticket_dict['id'] = str(ticket.id)
+        ticket_dict['creator_id'] = str(ticket.creator_id)
+        ticket_dict['assigned_to_id'] = str(ticket.assigned_to_id) if ticket.assigned_to_id else None
+        ticket_dict['reply_count'] = reply_count
+        result.append(ticket_dict)
+    
+    return result
+
+async def get_tickets_by_member(
+    member_id: str,
+    status: Optional[models.TicketStatus] = None,
+    page: int = 1,
+    page_size: int = 20
+):
+    """Get tickets created by a specific member (to their affiliate)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+    
+    query = models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.MEMBER_TO_AFFILIATE,
+        models.SupportTicket.creator_id == PydanticObjectId(member_id)
+    )
+    
+    if status:
+        query = query.find(models.SupportTicket.status == status)
+    
+    tickets = await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    # Get reply count for each ticket
+    result = []
+    for ticket in tickets:
+        reply_count = await models.TicketReply.find(
+            models.TicketReply.ticket_id == ticket.id
+        ).count()
+        
+        ticket_dict = ticket.dict()
+        ticket_dict['id'] = str(ticket.id)
+        ticket_dict['creator_id'] = str(ticket.creator_id)
+        ticket_dict['assigned_to_id'] = str(ticket.assigned_to_id) if ticket.assigned_to_id else None
+        ticket_dict['reply_count'] = reply_count
+        result.append(ticket_dict)
+    
+    return result
+
+async def add_ticket_reply(
+    ticket_id: str,
+    sender_id: PydanticObjectId,
+    sender_email: str,
+    sender_name: str,
+    sender_type: str,
+    message: str,
+    image_url: Optional[str] = None
+):
+    """Add a reply to a ticket"""
+    # Get the ticket
+    ticket = await get_ticket_by_id(ticket_id)
+    if not ticket:
+        return None
+    
+    # Create reply
+    reply = models.TicketReply(
+        ticket_id=PydanticObjectId(ticket_id),
+        sender_id=sender_id,
+        sender_email=sender_email,
+        sender_name=sender_name,
+        sender_type=sender_type,
+        message=message,
+        image_url=image_url
+    )
+    await reply.insert()
+    
+    # Update ticket status to ONGOING if it's OPEN and this is not the creator replying
+    if ticket.status == models.TicketStatus.OPEN and str(sender_id) != str(ticket.creator_id):
+        ticket.status = models.TicketStatus.ONGOING
+    
+    # Update last_reply_at
+    ticket.last_reply_at = datetime.utcnow()
+    ticket.updated_at = datetime.utcnow()
+    await ticket.save()
+    
+    return reply
+
+async def get_ticket_with_replies(ticket_id: str):
+    """Get a ticket with all its replies"""
+    ticket = await get_ticket_by_id(ticket_id)
+    if not ticket:
+        return None
+    
+    # Get all replies
+    replies = await models.TicketReply.find(
+        models.TicketReply.ticket_id == PydanticObjectId(ticket_id)
+    ).sort("created_at").to_list()
+    
+    # Convert to response format
+    ticket_dict = ticket.dict()
+    ticket_dict['id'] = str(ticket.id)
+    ticket_dict['creator_id'] = str(ticket.creator_id)
+    ticket_dict['assigned_to_id'] = str(ticket.assigned_to_id) if ticket.assigned_to_id else None
+    
+    replies_list = []
+    for reply in replies:
+        reply_dict = reply.dict()
+        reply_dict['id'] = str(reply.id)
+        reply_dict['ticket_id'] = str(reply.ticket_id)
+        reply_dict['sender_id'] = str(reply.sender_id)
+        replies_list.append(reply_dict)
+    
+    ticket_dict['replies'] = replies_list
+    
+    return ticket_dict
+
+async def update_ticket_status_priority(
+    ticket_id: str,
+    status: Optional[models.TicketStatus] = None,
+    priority: Optional[models.TicketPriority] = None
+):
+    """Update ticket status and/or priority"""
+    ticket = await get_ticket_by_id(ticket_id)
+    if not ticket:
+        return None
+    
+    if status:
+        ticket.status = status
+    if priority:
+        ticket.priority = priority
+    
+    ticket.updated_at = datetime.utcnow()
+    await ticket.save()
+    
+    return ticket
+
+async def get_ticket_stats_for_admin():
+    """Get ticket statistics for admin dashboard"""
+    # Count tickets by status
+    total = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN
+    ).count()
+    
+    open_count = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.status == models.TicketStatus.OPEN
+    ).count()
+    
+    ongoing_count = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.status == models.TicketStatus.ONGOING
+    ).count()
+    
+    closed_count = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.status == models.TicketStatus.CLOSED
+    ).count()
+    
+    # Count by priority
+    high_count = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.priority == models.TicketPriority.HIGH,
+        models.SupportTicket.status != models.TicketStatus.CLOSED
+    ).count()
+    
+    medium_count = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.priority == models.TicketPriority.MEDIUM,
+        models.SupportTicket.status != models.TicketStatus.CLOSED
+    ).count()
+    
+    average_count = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.priority == models.TicketPriority.AVERAGE,
+        models.SupportTicket.status != models.TicketStatus.CLOSED
+    ).count()
+    
+    # Count tickets created today
+    from datetime import datetime, timedelta
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tickets_today = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.created_at >= today_start
+    ).count()
+    
+    return {
+        "total_tickets": total,
+        "open": open_count,
+        "ongoing": ongoing_count,
+        "closed": closed_count,
+        "by_priority": {
+            "high": high_count,
+            "medium": medium_count,
+            "average": average_count
+        },
+        "tickets_today": tickets_today
+    }
+
+async def get_ticket_stats_for_affiliate(affiliate_id: str):
+    """Get ticket statistics for affiliate"""
+    # Tickets TO admin
+    my_tickets_total = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.creator_id == PydanticObjectId(affiliate_id)
+    ).count()
+    
+    my_open = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.creator_id == PydanticObjectId(affiliate_id),
+        models.SupportTicket.status == models.TicketStatus.OPEN
+    ).count()
+    
+    my_ongoing = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.creator_id == PydanticObjectId(affiliate_id),
+        models.SupportTicket.status == models.TicketStatus.ONGOING
+    ).count()
+    
+    my_closed = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.AFFILIATE_TO_ADMIN,
+        models.SupportTicket.creator_id == PydanticObjectId(affiliate_id),
+        models.SupportTicket.status == models.TicketStatus.CLOSED
+    ).count()
+    
+    # Tickets FROM members
+    member_tickets_total = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.MEMBER_TO_AFFILIATE,
+        models.SupportTicket.assigned_to_id == PydanticObjectId(affiliate_id)
+    ).count()
+    
+    member_open = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.MEMBER_TO_AFFILIATE,
+        models.SupportTicket.assigned_to_id == PydanticObjectId(affiliate_id),
+        models.SupportTicket.status == models.TicketStatus.OPEN
+    ).count()
+    
+    member_ongoing = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.MEMBER_TO_AFFILIATE,
+        models.SupportTicket.assigned_to_id == PydanticObjectId(affiliate_id),
+        models.SupportTicket.status == models.TicketStatus.ONGOING
+    ).count()
+    
+    member_closed = await models.SupportTicket.find(
+        models.SupportTicket.ticket_type == models.TicketType.MEMBER_TO_AFFILIATE,
+        models.SupportTicket.assigned_to_id == PydanticObjectId(affiliate_id),
+        models.SupportTicket.status == models.TicketStatus.CLOSED
+    ).count()
+    
+    return {
+        "my_tickets_to_admin": {
+            "total": my_tickets_total,
+            "open": my_open,
+            "ongoing": my_ongoing,
+            "closed": my_closed
+        },
+        "member_tickets": {
+            "total": member_tickets_total,
+            "open": member_open,
+            "ongoing": member_ongoing,
+            "closed": member_closed
+        }
+    }

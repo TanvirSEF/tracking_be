@@ -10,6 +10,20 @@ class RequestStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
 
+class TicketPriority(str, Enum):
+    AVERAGE = "average"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class TicketStatus(str, Enum):
+    OPEN = "open"
+    ONGOING = "ongoing"
+    CLOSED = "closed"
+
+class TicketType(str, Enum):
+    AFFILIATE_TO_ADMIN = "affiliate_to_admin"
+    MEMBER_TO_AFFILIATE = "member_to_affiliate"
+
 class User(Document):
     email: str = Field(..., unique=True, index=True)
     hashed_password: str
@@ -105,3 +119,52 @@ class SystemConfig(Document):
 
     class Settings:
         name = "system_config"
+
+class SupportTicket(Document):
+    """Support ticket model for both Affiliate->Admin and Member->Affiliate tickets"""
+    ticket_type: TicketType  # "affiliate_to_admin" or "member_to_affiliate"
+    
+    # Creator information (who created the ticket)
+    creator_id: PydanticObjectId = Field(..., index=True)  # Affiliate ID or Referral ID
+    creator_email: str
+    creator_name: str
+    
+    # Assignment (who should respond)
+    # For AFFILIATE_TO_ADMIN: can be None (any admin) or specific admin_id
+    # For MEMBER_TO_AFFILIATE: the affiliate_id
+    assigned_to_id: Optional[PydanticObjectId] = Field(None, index=True)
+    
+    # Ticket content
+    subject: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=5000)
+    priority: TicketPriority = Field(default=TicketPriority.AVERAGE)
+    status: TicketStatus = Field(default=TicketStatus.OPEN)
+    image_url: Optional[str] = None  # Cloudinary URL
+    
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_reply_at: Optional[datetime] = None  # Track when last reply was added
+    
+    class Settings:
+        name = "support_tickets"
+
+class TicketReply(Document):
+    """Reply/message in a support ticket conversation"""
+    ticket_id: PydanticObjectId = Field(..., index=True)  # Reference to SupportTicket
+    
+    # Sender information
+    sender_id: PydanticObjectId  # User ID, Affiliate ID, or Referral ID
+    sender_email: str
+    sender_name: str
+    sender_type: str  # "admin", "affiliate", or "member"
+    
+    # Reply content
+    message: str = Field(..., min_length=1, max_length=5000)
+    image_url: Optional[str] = None  # Cloudinary URL
+    
+    # Timestamp
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    
+    class Settings:
+        name = "ticket_replies"

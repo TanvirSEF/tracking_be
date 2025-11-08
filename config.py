@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     EMAIL_SMTP_PASSWORD: Optional[str] = None
     EMAIL_FROM_NAME: str = "Affiliate Management System"
     EMAIL_FROM_EMAIL: Optional[str] = None
+    
+    # Cloudinary settings for image storage
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
 
     class Config:
         env_file = ".env"

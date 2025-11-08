@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
@@ -137,6 +137,22 @@ class ReferralResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ReferralProfileUpdate(BaseModel):
+    """Schema for updating referral/member profile"""
+    full_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    timezone: Optional[str] = Field(None, min_length=1, max_length=100)
+    location: Optional[str] = Field(None, min_length=1, max_length=255)
+    headline: Optional[str] = Field(None, min_length=0, max_length=500)
+    bio: Optional[str] = Field(None, min_length=0, max_length=2000)
+    broker_id: Optional[str] = Field(None, min_length=0, max_length=100)
+    onemove_link: Optional[str] = Field(None, min_length=1)
+    
+    @validator('full_name', 'timezone', 'location', 'headline', 'bio', 'broker_id', 'onemove_link')
+    def strip_whitespace(cls, v):
+        if v is not None:
+            return v.strip()
+        return v
+
 class AdminRegistrationLinkResponse(BaseModel):
     registration_link: str
     full_url: str
@@ -240,3 +256,110 @@ class TopAffiliateResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ==================== Support Ticket Schemas ====================
+
+class TicketPriorityEnum(str, Enum):
+    AVERAGE = "average"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class TicketStatusEnum(str, Enum):
+    OPEN = "open"
+    ONGOING = "ongoing"
+    CLOSED = "closed"
+
+class TicketTypeEnum(str, Enum):
+    AFFILIATE_TO_ADMIN = "affiliate_to_admin"
+    MEMBER_TO_AFFILIATE = "member_to_affiliate"
+
+class TicketCreateRequest(BaseModel):
+    """Schema for creating a new support ticket"""
+    subject: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=5000)
+    priority: TicketPriorityEnum = Field(default=TicketPriorityEnum.AVERAGE)
+    name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    
+    @validator('subject', 'message', 'name')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class TicketReplyRequest(BaseModel):
+    """Schema for adding a reply to a ticket"""
+    message: str = Field(..., min_length=1, max_length=5000)
+    
+    @validator('message')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class TicketUpdateRequest(BaseModel):
+    """Schema for updating ticket status or priority"""
+    status: Optional[TicketStatusEnum] = None
+    priority: Optional[TicketPriorityEnum] = None
+
+class TicketReplyResponse(BaseModel):
+    """Schema for ticket reply response"""
+    id: str
+    ticket_id: str
+    sender_id: str
+    sender_email: str
+    sender_name: str
+    sender_type: str  # "admin", "affiliate", or "member"
+    message: str
+    image_url: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class TicketResponse(BaseModel):
+    """Schema for ticket response"""
+    id: str
+    ticket_type: str
+    creator_id: str
+    creator_email: str
+    creator_name: str
+    assigned_to_id: Optional[str] = None
+    subject: str
+    message: str
+    priority: str
+    status: str
+    image_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    last_reply_at: Optional[datetime] = None
+    reply_count: int = 0  # Number of replies
+    
+    class Config:
+        from_attributes = True
+
+class TicketWithRepliesResponse(BaseModel):
+    """Schema for ticket with all replies"""
+    id: str
+    ticket_type: str
+    creator_id: str
+    creator_email: str
+    creator_name: str
+    assigned_to_id: Optional[str] = None
+    subject: str
+    message: str
+    priority: str
+    status: str
+    image_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    last_reply_at: Optional[datetime] = None
+    replies: List[TicketReplyResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+class TicketStatsResponse(BaseModel):
+    """Schema for ticket statistics"""
+    total_tickets: int
+    open: int
+    ongoing: int
+    closed: int
+    by_priority: dict  # {"high": 5, "medium": 10, "average": 15}
+    tickets_today: int = 0
