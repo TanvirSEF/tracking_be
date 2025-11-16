@@ -110,7 +110,7 @@ async def affiliate_login(login_data: schemas.AffiliateLoginForm):
 
 @router.post("/referral/login", response_model=schemas.LoginResponse)
 async def referral_login(login_data: schemas.ReferralLoginForm):
-    """Referral-only login endpoint with role validation"""
+    """Referral/Member-only login endpoint"""
     identifier = login_data.email.lower().strip()
     
     # Rate limiting
@@ -120,39 +120,26 @@ async def referral_login(login_data: schemas.ReferralLoginForm):
             detail="Too many login attempts. Please try again later."
         )
 
-    user = await crud.authenticate_user(identifier, login_data.password)
-    if not user:
+    # Authenticate referral from Referral collection
+    referral = await crud.authenticate_referral(identifier, login_data.password)
+    if not referral:
         auth.register_login_failure(identifier)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid referral credentials"
         )
     
-    # Check if user is NOT admin (referral)
-    if user.is_admin:
-        auth.register_login_failure(identifier)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin users should use admin login endpoint"
-        )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated"
-        )
-    
     auth.register_login_success(identifier)
     access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": referral.email, "user_type": "referral"}, expires_delta=access_token_expires
     )
     
     return schemas.LoginResponse(
         access_token=access_token,
         token_type="bearer",
         user_type="referral",
-        email=user.email,
+        email=referral.email,
         is_admin=False
     )
 

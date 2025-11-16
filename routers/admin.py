@@ -27,6 +27,83 @@ async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(
     return current_user
 
 
+@router.post("/create-admin", response_model=schemas.AdminCreateResponse)
+async def create_admin_user(
+    admin_data: schemas.AdminCreateRequest,
+    current_user: models.User = Depends(get_current_admin)
+):
+    """
+    Create a new admin user with the same permissions.
+    Only existing admins can create new admins.
+    The new admin will have full access to all admin endpoints and the same registration link.
+    """
+    # Check if email already exists
+    existing_user = await models.User.find_one(models.User.email == admin_data.email.lower().strip())
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email already exists"
+        )
+    
+    # Create the admin user
+    try:
+        new_admin = await crud.create_admin_user(admin_data.email.lower().strip(), admin_data.password)
+        
+        return schemas.AdminCreateResponse(
+            message="Admin user created successfully",
+            admin_id=str(new_admin.id),
+            email=new_admin.email,
+            is_admin=new_admin.is_admin,
+            is_active=new_admin.is_active,
+            created_at=new_admin.created_at,
+            created_by=current_user.email
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create admin user: {str(e)}"
+        )
+
+
+@router.get("/admins", response_model=List[schemas.AdminResponse])
+async def get_all_admins(
+    page: int = 1,
+    page_size: int = 50,
+    current_user: models.User = Depends(get_current_admin)
+):
+    """
+    Get all admin users (paginated).
+    Only admins can view the list of other admins.
+    """
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    
+    skip = (page - 1) * page_size
+    
+    # Get all admin users
+    admin_users = await models.User.find(
+        models.User.is_admin == True
+    ).sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    # Convert to response format
+    result = []
+    for admin in admin_users:
+        result.append(schemas.AdminResponse(
+            id=str(admin.id),
+            email=admin.email,
+            is_admin=admin.is_admin,
+            is_active=admin.is_active,
+            is_email_verified=admin.is_email_verified,
+            created_at=admin.created_at
+        ))
+    
+    return result
+
+
 @router.get("/registration-link", response_model=schemas.AdminRegistrationLinkResponse)
 async def get_admin_registration_link(
     request: Request,
@@ -118,7 +195,7 @@ async def get_all_affiliates(
                 email=user.email,
                 location=affiliate.location,
                 language=affiliate.language,
-                onemove_link=affiliate.onemove_link,
+                puprime_referral_code=affiliate.puprime_referral_code,
                 puprime_link=affiliate.puprime_link,
                 unique_link=f"{settings.BASE_URL}/ref/{affiliate.unique_link}",
                 created_at=affiliate.created_at
@@ -231,3 +308,19 @@ async def delete_referral(
         "deleted_by_admin": current_user.email,
         "deleted_at": datetime.utcnow().isoformat()
     }
+
+
+@router.get("/top-affiliates", response_model=List[schemas.TopAffiliateResponse])
+async def get_top_affiliates(
+    limit: int = 10,
+    current_user: models.User = Depends(get_current_admin)
+):
+    """Get top affiliates ranked by referral count"""
+    # Validate limit
+    if limit < 1:
+        limit = 1
+    if limit > 100:
+        limit = 100
+    
+    top_affiliates = await crud.get_top_affiliates_by_referrals(limit=limit)
+    return top_affiliates

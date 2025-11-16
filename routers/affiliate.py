@@ -102,7 +102,42 @@ async def get_affiliate_profile(credentials: HTTPAuthorizationCredentials = Depe
         email=current_user.email,
         location=affiliate.location,
         language=affiliate.language,
-        onemove_link=affiliate.onemove_link,
+        puprime_referral_code=affiliate.puprime_referral_code,
+        puprime_link=affiliate.puprime_link,
+        unique_link=f"{settings.BASE_URL}/ref/{affiliate.unique_link}",
+        created_at=affiliate.created_at
+    )
+
+
+@router.put("/affiliate/profile", response_model=schemas.AffiliateResponse)
+async def update_affiliate_profile(
+    profile_data: schemas.AffiliateProfileUpdate,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Update current affiliate's profile information"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users don't have affiliate profiles"
+        )
+    
+    # Update the affiliate profile
+    affiliate = await crud.update_affiliate_profile(current_user.id, profile_data)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    return schemas.AffiliateResponse(
+        id=str(affiliate.id),
+        name=affiliate.name,
+        email=current_user.email,
+        location=affiliate.location,
+        language=affiliate.language,
+        puprime_referral_code=affiliate.puprime_referral_code,
         puprime_link=affiliate.puprime_link,
         unique_link=f"{settings.BASE_URL}/ref/{affiliate.unique_link}",
         created_at=affiliate.created_at
@@ -286,6 +321,177 @@ async def delete_affiliate_referral(
         "message": "Referral deleted successfully",
         "deleted_referral_id": str(referral.id),
         "referral_email": referral.email
+    }
+
+
+# ==================== Affiliate Notes Endpoints ====================
+
+@router.post("/affiliate/referrals/{referral_id}/notes", response_model=schemas.NoteResponse)
+async def create_note(
+    referral_id: str,
+    note_data: schemas.NoteCreate,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Create a note for a specific referral"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot create affiliate notes"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Create the note
+    note = await crud.create_affiliate_note(str(affiliate.id), referral_id, note_data)
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Referral not found or doesn't belong to this affiliate"
+        )
+    
+    return note
+
+
+@router.get("/affiliate/referrals/{referral_id}/notes", response_model=List[schemas.NoteResponse])
+async def get_referral_notes(
+    referral_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get all notes for a specific referral"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot access affiliate notes"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Get notes
+    notes = await crud.get_notes_by_referral(str(affiliate.id), referral_id)
+    
+    if notes is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Referral not found or doesn't belong to this affiliate"
+        )
+    
+    return notes
+
+
+@router.get("/affiliate/notes", response_model=List[schemas.NoteResponse])
+async def get_all_notes(
+    page: int = 1,
+    page_size: int = 50,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get all notes created by the current affiliate"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot access affiliate notes"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Get all notes
+    notes = await crud.get_all_notes_by_affiliate(str(affiliate.id), page=page, page_size=page_size)
+    return notes
+
+
+@router.put("/affiliate/notes/{note_id}", response_model=schemas.NoteResponse)
+async def update_note(
+    note_id: str,
+    note_data: schemas.NoteUpdate,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Update an existing note"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot update affiliate notes"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Update the note
+    note = await crud.update_affiliate_note(note_id, str(affiliate.id), note_data)
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found or doesn't belong to this affiliate"
+        )
+    
+    return note
+
+
+@router.delete("/affiliate/notes/{note_id}")
+async def delete_note(
+    note_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Delete a note"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot delete affiliate notes"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Delete the note
+    result = await crud.delete_affiliate_note(note_id, str(affiliate.id))
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found or doesn't belong to this affiliate"
+        )
+    
+    return {
+        "message": "Note deleted successfully",
+        "note_id": note_id
     }
 
 
