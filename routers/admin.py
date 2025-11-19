@@ -143,7 +143,7 @@ async def review_affiliate_request(
                     detail="Request not found or already processed"
                 )
         except ValueError as e:
-            # Handle email verification error
+            # Handle validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e)
@@ -162,18 +162,21 @@ async def review_affiliate_request(
             "reviewed_at": datetime.utcnow().isoformat()
         }
     else:
-        request = await crud.reject_affiliate_request(approval.request_id, str(current_user.id))
-        if not request:
+        request_info = await crud.reject_affiliate_request(approval.request_id, str(current_user.id))
+        if not request_info:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Request not found or already processed"
             )
         return {
-            "message": "Affiliate request rejected",
+            "message": "Affiliate request rejected and removed from database",
             "reason": approval.reason if approval.reason else "No reason provided",
+            "request_id": request_info["id"],
+            "email": request_info["email"],
+            "name": request_info["name"],
             "status": "rejected",
             "admin_reviewer": current_user.email,
-            "reviewed_at": datetime.utcnow().isoformat()
+            "reviewed_at": request_info["reviewed_at"].isoformat()
         }
 
 

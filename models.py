@@ -29,7 +29,7 @@ class User(Document):
     hashed_password: str
     is_admin: bool = Field(default=False)
     is_active: bool = Field(default=True)
-    is_email_verified: bool = Field(default=False)
+    is_email_verified: bool = Field(default=True)  # Auto-verified, no OTP required
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
@@ -46,7 +46,7 @@ class AffiliateRequest(Document):
     puprime_referral_code: Optional[str] = Field(None, alias="onemove_link", serialization_alias="onemove_link")
     puprime_link: str
     status: RequestStatus = Field(default=RequestStatus.PENDING)
-    is_email_verified: bool = Field(default=False)
+    is_email_verified: bool = Field(default=True)  # Auto-verified, no OTP required
     created_at: datetime = Field(default_factory=datetime.utcnow)
     reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[str] = None

@@ -1,4 +1,4 @@
-import smtplib
+import aiosmtplib
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -21,19 +21,45 @@ class EmailService:
         self.from_name = settings.EMAIL_FROM_NAME
         self.from_email = settings.EMAIL_FROM_EMAIL or settings.EMAIL_SMTP_USERNAME
     
-    def _create_smtp_connection(self):
-        """Create secure SMTP connection"""
+    def _is_configured(self) -> bool:
+        """Check if email service is properly configured"""
+        if not self.smtp_host or not self.smtp_port:
+            return False
+        if not self.smtp_username or not self.smtp_password:
+            return False
+        # from_email can fallback to smtp_username, so check if at least one is set
+        if not self.from_email and not self.smtp_username:
+            return False
+        return True
+    
+    async def _create_smtp_connection(self):
+        """Create secure async SMTP connection"""
+        if not self._is_configured():
+            raise ValueError("Email service is not properly configured. Please check your .env file for EMAIL_SMTP_* settings.")
+        
         context = ssl.create_default_context()
-        server = smtplib.SMTP(self.smtp_host, self.smtp_port)
-        server.starttls(context=context)
+        server = aiosmtplib.SMTP(
+            hostname=self.smtp_host,
+            port=self.smtp_port,
+            use_tls=True,
+            tls_context=context
+        )
+        
+        await server.connect()
         
         if self.smtp_username and self.smtp_password:
-            server.login(self.smtp_username, self.smtp_password)
+            await server.login(self.smtp_username, self.smtp_password)
         
         return server
     
     async def send_welcome_email(self, to_email: str, user_type: str, name: str = None) -> bool:
         """Send welcome email after registration"""
+        # Check if email service is configured
+        if not self._is_configured():
+            print(f"ERROR: Cannot send welcome email to {to_email} - Email service not configured")
+            print("Please set EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USERNAME, EMAIL_SMTP_PASSWORD, and EMAIL_FROM_EMAIL in your .env file")
+            return False
+        
         try:
             msg = MIMEMultipart('alternative')
             msg['Subject'] = f"Welcome to OneMove Affiliate Management System"
@@ -140,19 +166,33 @@ class EmailService:
             msg.attach(text_part)
             msg.attach(html_part)
             
-            # Send email
-            with self._create_smtp_connection() as server:
-                server.send_message(msg)
+            # Send email using async SMTP
+            server = await self._create_smtp_connection()
+            try:
+                await server.send_message(msg)
+                print(f"✓ Welcome email sent successfully to {to_email}")
+                return True
+            finally:
+                await server.quit()
             
-            print(f"Welcome email sent to {to_email}")
-            return True
-            
+        except ValueError as e:
+            # Configuration error
+            print(f"ERROR: {e}")
+            return False
         except Exception as e:
-            print(f"Failed to send welcome email to {to_email}: {e}")
+            print(f"ERROR: Failed to send welcome email to {to_email}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def send_password_reset_email(self, to_email: str, reset_token: str) -> bool:
         """Send password reset email with professional template"""
+        # Check if email service is configured
+        if not self._is_configured():
+            print(f"ERROR: Cannot send password reset email to {to_email} - Email service not configured")
+            print("Please set EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USERNAME, EMAIL_SMTP_PASSWORD, and EMAIL_FROM_EMAIL in your .env file")
+            return False
+        
         try:
             msg = MIMEMultipart('alternative')
             msg['Subject'] = "OneMove Password Reset Request"
@@ -330,15 +370,23 @@ class EmailService:
             msg.attach(text_part)
             msg.attach(html_part)
             
-            # Send email
-            with self._create_smtp_connection() as server:
-                server.send_message(msg)
+            # Send email using async SMTP
+            server = await self._create_smtp_connection()
+            try:
+                await server.send_message(msg)
+                print(f"✓ Password reset email sent successfully to {to_email}")
+                return True
+            finally:
+                await server.quit()
             
-            print(f"Password reset email sent to {to_email}")
-            return True
-            
+        except ValueError as e:
+            # Configuration error
+            print(f"ERROR: {e}")
+            return False
         except Exception as e:
-            print(f"Failed to send password reset email to {to_email}: {e}")
+            print(f"ERROR: Failed to send password reset email to {to_email}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 # Global email service instance

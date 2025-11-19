@@ -38,7 +38,7 @@ async def create_admin_user(email: str, password: str):
             email=email,
             hashed_password=hashed_password,
             is_admin=True,
-            is_email_verified=True  # Auto-verify emails (OTP verification removed)
+            is_email_verified=True  # Auto-verified, no OTP required
         )
         await admin.insert()
         
@@ -84,7 +84,7 @@ async def create_affiliate_request(request: schemas.AffiliateRequestCreate):
         language=request.language,
         puprime_referral_code=request.puprime_referral_code,
         puprime_link=request.puprime_link,
-        is_email_verified=True  # Auto-verify emails (OTP verification removed)
+        is_email_verified=True  # Auto-verified, no OTP required
     )
     await affiliate_request.insert()
     
@@ -167,8 +167,6 @@ async def get_all_requests(
 
 async def approve_affiliate_request(request_id: str, admin_id: str):
     """Approve an affiliate request and create their account"""
-    print(f"DEBUG: Approving request_id: {request_id}")
-    
     # Handle both string and ObjectId formats
     try:
         from bson import ObjectId
@@ -180,16 +178,10 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
         # Fallback to string search
         request = await models.AffiliateRequest.find_one(models.AffiliateRequest.id == request_id)
     
-    print(f"DEBUG: Found request: {request}")
-    if request:
-        print(f"DEBUG: Request status: {request.status}")
-        print(f"DEBUG: Email verified: {request.is_email_verified}")
-    
     if not request or request.status != models.RequestStatus.PENDING:
-        print(f"DEBUG: Request not found or not pending. Request: {request}, Status: {request.status if request else 'None'}")
         return None
     
-    # Create user account (emails are auto-verified, OTP verification removed)
+    # Create user account (emails are auto-verified, no OTP required)
     user = models.User(
         email=request.email,
         hashed_password=request.hashed_password,
@@ -240,7 +232,7 @@ async def approve_affiliate_request(request_id: str, admin_id: str):
     return affiliate
 
 async def reject_affiliate_request(request_id: str, admin_id: str):
-    """Reject an affiliate request"""
+    """Reject an affiliate request and delete it from database"""
     # Handle both string and ObjectId formats
     try:
         from bson import ObjectId
@@ -255,11 +247,20 @@ async def reject_affiliate_request(request_id: str, admin_id: str):
     if not request or request.status != models.RequestStatus.PENDING:
         return None
     
-    request.status = models.RequestStatus.REJECTED
-    request.reviewed_at = datetime.utcnow()
-    request.reviewed_by = admin_id
-    await request.save()
-    return request
+    # Store request info before deletion for response
+    request_info = {
+        "id": str(request.id),
+        "email": request.email,
+        "name": request.name,
+        "status": "rejected",
+        "reviewed_by": admin_id,
+        "reviewed_at": datetime.utcnow()
+    }
+    
+    # Delete the request from database
+    await request.delete()
+    
+    return request_info
 
 async def authenticate_user(email: str, password: str):
     """Authenticate a user"""
