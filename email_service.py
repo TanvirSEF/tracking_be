@@ -38,14 +38,28 @@ class EmailService:
             raise ValueError("Email service is not properly configured. Please check your .env file for EMAIL_SMTP_* settings.")
         
         context = ssl.create_default_context()
-        server = aiosmtplib.SMTP(
-            hostname=self.smtp_host,
-            port=self.smtp_port,
-            use_tls=True,
-            tls_context=context
-        )
         
-        await server.connect()
+        # For port 587, use STARTTLS (connect first, then upgrade)
+        # For port 465, use direct TLS (use_tls=True)
+        if self.smtp_port == 587:
+            # Port 587 uses STARTTLS - aiosmtplib handles this automatically
+            server = aiosmtplib.SMTP(
+                hostname=self.smtp_host,
+                port=self.smtp_port,
+                use_tls=False,  # Don't use direct TLS
+                start_tls=True,  # Use STARTTLS instead
+                tls_context=context
+            )
+            await server.connect()
+        else:
+            # Port 465 or other ports use direct TLS
+            server = aiosmtplib.SMTP(
+                hostname=self.smtp_host,
+                port=self.smtp_port,
+                use_tls=True,
+                tls_context=context
+            )
+            await server.connect()
         
         if self.smtp_username and self.smtp_password:
             await server.login(self.smtp_username, self.smtp_password)
@@ -170,7 +184,7 @@ class EmailService:
             server = await self._create_smtp_connection()
             try:
                 await server.send_message(msg)
-                print(f"✓ Welcome email sent successfully to {to_email}")
+                print(f"[SUCCESS] Welcome email sent successfully to {to_email}")
                 return True
             finally:
                 await server.quit()
@@ -222,44 +236,33 @@ class EmailService:
                     }}
                     .container {{
                         background-color: #ffffff;
-                        padding: 30px;
+                        padding: 40px;
                         border-radius: 10px;
                         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
                     }}
-                    .header {{
-                        text-align: center;
-                        margin-bottom: 30px;
-                    }}
-                    .logo {{
-                        font-size: 24px;
-                        font-weight: bold;
-                        color: #2c3e50;
-                        margin-bottom: 10px;
-                    }}
-                    .onemove-brand {{
-                        color: #007bff;
-                        font-weight: bold;
-                    }}
-                    .title {{
-                        font-size: 20px;
-                        color: #2c3e50;
-                        margin-bottom: 20px;
-                    }}
                     .content {{
+                        text-align: center;
                         margin-bottom: 30px;
                     }}
                     .button {{
                         display: inline-block;
-                        background-color: #dc3545;
-                        color: white;
-                        padding: 12px 30px;
-                        text-decoration: none;
+                        background-color: #c4a572;
+                        color: #ffffff !important;
+                        padding: 14px 40px;
+                        text-decoration: none !important;
                         border-radius: 5px;
                         font-weight: bold;
-                        margin: 20px 0;
+                        font-size: 16px;
+                        margin: 30px 0;
+                        border: none;
                     }}
                     .button:hover {{
-                        background-color: #c82333;
+                        background-color: #b89562;
+                        color: #ffffff !important;
+                    }}
+                    a.button {{
+                        color: #ffffff !important;
+                        text-decoration: none !important;
                     }}
                     .footer {{
                         margin-top: 30px;
@@ -269,69 +272,26 @@ class EmailService:
                         color: #666;
                         text-align: center;
                     }}
-                    .warning {{
-                        background-color: #fff3cd;
-                        border: 1px solid #ffeaa7;
-                        color: #856404;
-                        padding: 15px;
-                        border-radius: 5px;
-                        margin: 20px 0;
-                    }}
-                    .token-display {{
-                        background-color: #f8f9fa;
-                        border: 2px solid #dc3545;
-                        border-radius: 10px;
-                        padding: 20px;
-                        text-align: center;
-                        font-size: 18px;
-                        font-weight: bold;
-                        letter-spacing: 3px;
-                        color: #dc3545;
-                        font-family: 'Courier New', monospace;
-                        margin: 20px 0;
-                        word-break: break-all;
-                    }}
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <div class="header">
-                        <div class="logo">🔐 <span class="onemove-brand">OneMove</span> Password Reset</div>
-                        <div class="title">Password Reset Request</div>
-                    </div>
-                    
                     <div class="content">
                         <p>Hello,</p>
                         <p>We received a request to reset your password for your OneMove account.</p>
+                        <p>Click the button below to reset your password:</p>
                         
-                        <p>To reset your password, please use the following reset token:</p>
-                        
-                        <div class="token-display">
-                            {reset_token}
+                        <div>
+                            <a href="{reset_url}" class="button" style="background-color: #c4a572; color: #ffffff !important; text-decoration: none; padding: 14px 40px; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;">Reset My Password</a>
                         </div>
                         
-                        <p>Or click the button below to reset your password:</p>
-                        
-                        <div style="text-align: center;">
-                            <a href="{reset_url}" class="button">Reset My Password</a>
-                        </div>
-                        
-                        <div class="warning">
-                            <strong>⚠️ Important Security Information:</strong>
-                            <ul>
-                                <li>This reset token will expire in 24 hours</li>
-                                <li>This token can only be used once</li>
-                                <li>If you didn't request this reset, please ignore this email</li>
-                                <li>Your password will remain unchanged until you use this token</li>
-                            </ul>
-                        </div>
-                        
-                        <p>If you have any questions or concerns, please contact our support team immediately.</p>
+                        <p style="font-size: 12px; color: #666; margin-top: 30px;">
+                            This link will expire in 24 hours. If you didn't request this reset, please ignore this email.
+                        </p>
                     </div>
                     
                     <div class="footer">
                         <p>This email was sent by the <strong>OneMove Affiliate Management System</strong>.</p>
-                        <p>If you didn't request this password reset, please ignore this email and your password will remain unchanged.</p>
                     </div>
                 </div>
             </body>
@@ -346,22 +306,12 @@ class EmailService:
             
             We received a request to reset your password for your OneMove account.
             
-            To reset your password, please use the following reset token:
+            To reset your password, please visit this link:
+            {reset_url}
             
-            {reset_token}
-            
-            Or visit this link: {reset_url}
-            
-            IMPORTANT SECURITY INFORMATION:
-            - This reset token will expire in 24 hours
-            - This token can only be used once
-            - If you didn't request this reset, please ignore this email
-            - Your password will remain unchanged until you use this token
-            
-            If you have any questions or concerns, please contact our support team immediately.
+            This link will expire in 24 hours. If you didn't request this reset, please ignore this email.
             
             This email was sent by the OneMove Affiliate Management System.
-            If you didn't request this password reset, please ignore this email and your password will remain unchanged.
             """
             
             text_part = MIMEText(text_content, 'plain')
@@ -374,7 +324,7 @@ class EmailService:
             server = await self._create_smtp_connection()
             try:
                 await server.send_message(msg)
-                print(f"✓ Password reset email sent successfully to {to_email}")
+                print(f"[SUCCESS] Password reset email sent successfully to {to_email}")
                 return True
             finally:
                 await server.quit()
