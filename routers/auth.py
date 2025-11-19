@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import schemas
 import crud
 import auth_utils as auth
+import models
 
 router = APIRouter()
 
@@ -92,6 +93,25 @@ async def affiliate_login(login_data: schemas.AffiliateLoginForm):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated"
         )
+    
+    # Check if user has approved affiliate profile (admin approval required)
+    affiliate = await crud.get_affiliate_by_user(user.id)
+    if not affiliate:
+        # Check if there's a pending request
+        request = await models.AffiliateRequest.find_one(
+            models.AffiliateRequest.email == user.email
+        )
+        if request:
+            if request.status == models.RequestStatus.PENDING:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Your affiliate registration is pending admin approval. Please wait for approval before logging in."
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Affiliate profile not found. Please register as an affiliate first."
+            )
     
     auth.register_login_success(identifier)
     access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)

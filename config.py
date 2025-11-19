@@ -20,9 +20,10 @@ class Settings(BaseSettings):
     # Comma-separated list, e.g. "http://localhost:3000,http://localhost:8000"
     CORS_ORIGINS: str = "*"
     
-    # Email verification settings
-    EMAIL_VERIFICATION_ENABLED: bool = True
-    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
+    # Email settings (for welcome emails and password reset)
+    # Note: OTP/email verification system has been removed - emails are auto-verified
+    EMAIL_VERIFICATION_ENABLED: bool = True  # Controls if emails (welcome, password reset) are sent
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24  # Password reset token expiration
     EMAIL_SMTP_HOST: str = "smtp.gmail.com"
     EMAIL_SMTP_PORT: int = 587
     EMAIL_SMTP_USERNAME: Optional[str] = None

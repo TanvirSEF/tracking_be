@@ -221,8 +221,11 @@ async def mark_password_reset_token_as_used(token_record: models.EmailVerificati
 
 async def send_password_reset_email(email: str, token: str) -> bool:
     """Send password reset email using email service"""
+    # Note: EMAIL_VERIFICATION_ENABLED only controls password reset emails, not OTP verification
+    # OTP verification system has been removed - emails are auto-verified
     if not settings.EMAIL_VERIFICATION_ENABLED:
-        return True  # Skip email if disabled
+        print("Warning: Email sending is disabled. Password reset email will not be sent.")
+        return False
     
     return await email_service.send_password_reset_email(email, token)
 
