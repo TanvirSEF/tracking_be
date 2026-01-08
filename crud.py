@@ -358,11 +358,8 @@ async def create_referral_registration(unique_link: str, registration_data: sche
     )
     await referral.insert()
     
-    # Send welcome email after referral registration
-    try:
-        await send_welcome_email(registration_data.email, "referral", registration_data.full_name)
-    except Exception as e:
-        print(f"Warning: Failed to send welcome email to {registration_data.email}: {e}")
+    # Note: Welcome email is not sent automatically
+    # Affiliate can send custom email using /affiliate/send-email endpoint
     
     # Return response format with string IDs
     return schemas.ReferralResponse(

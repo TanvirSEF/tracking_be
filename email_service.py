@@ -338,6 +338,127 @@ class EmailService:
             import traceback
             traceback.print_exc()
             return False
+    
+    async def send_custom_email(self, to_email: str, subject: str, message: str, recipient_name: str = None) -> bool:
+        """Send custom email with HTML content"""
+        # Check if email service is configured
+        if not self._is_configured():
+            print(f"ERROR: Cannot send custom email to {to_email} - Email service not configured")
+            print("Please set EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USERNAME, EMAIL_SMTP_PASSWORD, and EMAIL_FROM_EMAIL in your .env file")
+            return False
+        
+        try:
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = f"{self.from_name} <{self.from_email}>"
+            msg['To'] = to_email
+            
+            display_name = recipient_name or to_email.split('@')[0]
+            
+            # HTML email template with custom message
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{subject}</title>
+                <style>
+                    body {{
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        line-height: 1.6;
+                        color: #333;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                        background-color: #f4f4f4;
+                    }}
+                    .container {{
+                        background-color: #ffffff;
+                        padding: 30px;
+                        border-radius: 10px;
+                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    }}
+                    .header {{
+                        text-align: center;
+                        margin-bottom: 30px;
+                    }}
+                    .logo {{
+                        font-size: 24px;
+                        font-weight: bold;
+                        color: #27ae60;
+                        margin-bottom: 10px;
+                    }}
+                    .content {{
+                        margin: 20px 0;
+                    }}
+                    .footer {{
+                        margin-top: 30px;
+                        padding-top: 20px;
+                        border-top: 1px solid #eee;
+                        font-size: 12px;
+                        color: #666;
+                        text-align: center;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div class="logo">OneMove Affiliate Management System</div>
+                    </div>
+                    
+                    <div class="content">
+                        <p>Hello {display_name},</p>
+                        {message}
+                    </div>
+                    
+                    <div class="footer">
+                        <p>This email was sent by your affiliate from the <strong>OneMove Affiliate Management System</strong>.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Plain text version (strip HTML tags for basic text)
+            import re
+            text_content = re.sub(r'<[^>]+>', '', message)
+            text_content = f"""
+            {subject}
+            
+            Hello {display_name},
+            
+            {text_content}
+            
+            ---
+            This email was sent by your affiliate from the OneMove Affiliate Management System.
+            """
+            
+            text_part = MIMEText(text_content, 'plain')
+            html_part = MIMEText(html_content, 'html')
+            
+            msg.attach(text_part)
+            msg.attach(html_part)
+            
+            # Send email using async SMTP
+            server = await self._create_smtp_connection()
+            try:
+                await server.send_message(msg)
+                print(f"[SUCCESS] Custom email sent successfully to {to_email}")
+                return True
+            finally:
+                await server.quit()
+            
+        except ValueError as e:
+            # Configuration error
+            print(f"ERROR: {e}")
+            return False
+        except Exception as e:
+            print(f"ERROR: Failed to send custom email to {to_email}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 # Global email service instance
 email_service = EmailService()

@@ -543,6 +543,83 @@ async def get_affiliate_status(credentials: HTTPAuthorizationCredentials = Depen
             }
 
 
+@router.post("/affiliate/send-email", response_model=schemas.CustomEmailResponse)
+async def send_custom_email_to_referral(
+    email_data: schemas.CustomEmailRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """
+    Send custom email to a referral
+    
+    This endpoint allows affiliates to send customized emails to their referrals.
+    You can use HTML in the message field for rich formatting.
+    """
+    from datetime import datetime
+    from beanie import PydanticObjectId
+    from email_service import email_service
+    
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot send emails to referrals"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Find the referral
+    try:
+        referral = await models.Referral.find_one(
+            models.Referral.id == PydanticObjectId(email_data.referral_id)
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid referral ID format"
+        )
+    
+    if not referral:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Referral not found"
+        )
+    
+    # Verify the referral belongs to this affiliate
+    if str(referral.affiliate_id) != str(affiliate.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only send emails to your own referrals"
+        )
+    
+    # Send the custom email
+    email_sent = await email_service.send_custom_email(
+        to_email=referral.email,
+        subject=email_data.subject,
+        message=email_data.message,
+        recipient_name=referral.full_name
+    )
+    
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send email. Please check email service configuration."
+        )
+    
+    return schemas.CustomEmailResponse(
+        message="Email sent successfully",
+        referral_email=referral.email,
+        referral_name=referral.full_name,
+        sent_at=datetime.utcnow()
+    )
+
+
 
 
 
