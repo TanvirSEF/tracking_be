@@ -363,3 +363,22 @@ class TicketStatsResponse(BaseModel):
     closed: int
     by_priority: dict  # {"high": 5, "medium": 10, "average": 15}
     tickets_today: int = 0
+
+# ==================== Custom Email Schemas ====================
+
+class CustomEmailRequest(BaseModel):
+    """Schema for sending custom email to referral"""
+    referral_id: str = Field(..., description="ID of the referral to send email to")
+    subject: str = Field(..., min_length=1, max_length=200, description="Email subject")
+    message: str = Field(..., min_length=1, max_length=5000, description="Email message content (HTML supported)")
+    
+    @validator('subject', 'message')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class CustomEmailResponse(BaseModel):
+    """Response schema for custom email sending"""
+    message: str
+    referral_email: str
+    referral_name: str
+    sent_at: datetime
