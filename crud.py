@@ -358,8 +358,49 @@ async def create_referral_registration(unique_link: str, registration_data: sche
     )
     await referral.insert()
     
-    # Note: Welcome email is not sent automatically
-    # Affiliate can send custom email using /affiliate/send-email endpoint
+    # Send welcome email using affiliate's custom template if available
+    try:
+        # Get affiliate's email template
+        email_template = await models.AffiliateEmailTemplate.find_one(
+            models.AffiliateEmailTemplate.affiliate_id == affiliate.id,
+            models.AffiliateEmailTemplate.is_active == True
+        )
+        
+        # Get affiliate user for email
+        affiliate_user = await models.User.find_one(models.User.id == affiliate.user_id)
+        
+        if email_template and affiliate_user:
+            # Send using affiliate's custom template
+            from email_service import email_service
+            template_dict = {
+                'subject': email_template.subject,
+                'html_content': email_template.html_content,
+                'text_content': email_template.text_content
+            }
+            
+            await email_service.send_affiliate_template_email(
+                to_email=referral.email,
+                affiliate_template=template_dict,
+                member_name=referral.full_name,
+                member_email=referral.email,
+                affiliate_name=affiliate.name,
+                affiliate_email=affiliate_user.email,
+                unique_link=f"{settings.BASE_URL}/ref/{unique_link}",
+                registration_date=referral.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            )
+            print(f"[INFO] Sent custom template email to {referral.email}")
+        else:
+            # Send default welcome email
+            from email_service import email_service
+            await email_service.send_welcome_email(
+                to_email=referral.email,
+                user_type="member",
+                name=referral.full_name
+            )
+            print(f"[INFO] Sent default welcome email to {referral.email}")
+    except Exception as e:
+        print(f"[WARNING] Failed to send welcome email to {referral.email}: {e}")
+        # Don't fail registration if email fails
     
     # Return response format with string IDs
     return schemas.ReferralResponse(
@@ -379,6 +420,7 @@ async def create_referral_registration(unique_link: str, registration_data: sche
         puprime_verification=referral.puprime_verification if referral.puprime_verification is not None else False,
         created_at=referral.created_at
     )
+
 
 async def get_referrals_by_affiliate(affiliate_id: str, page: int = 1, page_size: int = 20):
     """Get all referrals for a specific affiliate (paginated)"""
@@ -1360,3 +1402,122 @@ async def get_ticket_stats_for_affiliate(affiliate_id: str):
             "closed": member_closed
         }
     }
+
+# ==================== Affiliate Email Template CRUD Functions ====================
+
+async def create_affiliate_email_template(affiliate_id: str, template_data: schemas.EmailTemplateCreate):
+    """Create or update an affiliate's email template"""
+    from beanie import PydanticObjectId
+    
+    # Check if template already exists for this affiliate
+    existing_template = await models.AffiliateEmailTemplate.find_one(
+        models.AffiliateEmailTemplate.affiliate_id == PydanticObjectId(affiliate_id)
+    )
+    
+    if existing_template:
+        # Update existing template
+        existing_template.subject = template_data.subject
+        existing_template.html_content = template_data.html_content
+        existing_template.text_content = template_data.text_content
+        existing_template.is_active = template_data.is_active
+        existing_template.updated_at = datetime.utcnow()
+        await existing_template.save()
+        
+        return schemas.EmailTemplateResponse(
+            id=str(existing_template.id),
+            affiliate_id=str(existing_template.affiliate_id),
+            subject=existing_template.subject,
+            html_content=existing_template.html_content,
+            text_content=existing_template.text_content,
+            is_active=existing_template.is_active,
+            created_at=existing_template.created_at,
+            updated_at=existing_template.updated_at
+        )
+    
+    # Create new template
+    template = models.AffiliateEmailTemplate(
+        affiliate_id=PydanticObjectId(affiliate_id),
+        subject=template_data.subject,
+        html_content=template_data.html_content,
+        text_content=template_data.text_content,
+        is_active=template_data.is_active
+    )
+    await template.insert()
+    
+    return schemas.EmailTemplateResponse(
+        id=str(template.id),
+        affiliate_id=str(template.affiliate_id),
+        subject=template.subject,
+        html_content=template.html_content,
+        text_content=template.text_content,
+        is_active=template.is_active,
+        created_at=template.created_at,
+        updated_at=template.updated_at
+    )
+
+async def get_affiliate_email_template(affiliate_id: str):
+    """Get an affiliate's email template"""
+    from beanie import PydanticObjectId
+    
+    template = await models.AffiliateEmailTemplate.find_one(
+        models.AffiliateEmailTemplate.affiliate_id == PydanticObjectId(affiliate_id)
+    )
+    
+    if not template:
+        return None
+    
+    return schemas.EmailTemplateResponse(
+        id=str(template.id),
+        affiliate_id=str(template.affiliate_id),
+        subject=template.subject,
+        html_content=template.html_content,
+        text_content=template.text_content,
+        is_active=template.is_active,
+        created_at=template.created_at,
+        updated_at=template.updated_at
+    )
+
+async def update_affiliate_email_template(affiliate_id: str, template_data: schemas.EmailTemplateUpdate):
+    """Update an affiliate's email template"""
+    from beanie import PydanticObjectId
+    
+    template = await models.AffiliateEmailTemplate.find_one(
+        models.AffiliateEmailTemplate.affiliate_id == PydanticObjectId(affiliate_id)
+    )
+    
+    if not template:
+        return None
+    
+    # Update only provided fields
+    update_dict = template_data.dict(exclude_unset=True)
+    
+    for field, value in update_dict.items():
+        setattr(template, field, value)
+    
+    template.updated_at = datetime.utcnow()
+    await template.save()
+    
+    return schemas.EmailTemplateResponse(
+        id=str(template.id),
+        affiliate_id=str(template.affiliate_id),
+        subject=template.subject,
+        html_content=template.html_content,
+        text_content=template.text_content,
+        is_active=template.is_active,
+        created_at=template.created_at,
+        updated_at=template.updated_at
+    )
+
+async def delete_affiliate_email_template(affiliate_id: str):
+    """Delete an affiliate's email template"""
+    from beanie import PydanticObjectId
+    
+    template = await models.AffiliateEmailTemplate.find_one(
+        models.AffiliateEmailTemplate.affiliate_id == PydanticObjectId(affiliate_id)
+    )
+    
+    if not template:
+        return None
+    
+    await template.delete()
+    return True

@@ -459,6 +459,80 @@ class EmailService:
             import traceback
             traceback.print_exc()
             return False
+    
+    async def send_affiliate_template_email(
+        self,
+        to_email: str,
+        affiliate_template: dict,
+        member_name: str,
+        member_email: str,
+        affiliate_name: str,
+        affiliate_email: str,
+        unique_link: str,
+        registration_date: str
+    ) -> bool:
+        """Send email using affiliate's custom template with variable substitution"""
+        # Check if email service is configured
+        if not self._is_configured():
+            print(f"ERROR: Cannot send template email to {to_email} - Email service not configured")
+            return False
+        
+        try:
+            # Variable substitution mapping
+            variables = {
+                '{member_name}': member_name,
+                '{member_email}': member_email,
+                '{affiliate_name}': affiliate_name,
+                '{affiliate_email}': affiliate_email,
+                '{unique_link}': unique_link,
+                '{registration_date}': registration_date
+            }
+            
+            # Substitute variables in subject and content
+            subject = affiliate_template['subject']
+            html_content = affiliate_template['html_content']
+            text_content = affiliate_template.get('text_content', '')
+            
+            for var, value in variables.items():
+                subject = subject.replace(var, value)
+                html_content = html_content.replace(var, value)
+                if text_content:
+                    text_content = text_content.replace(var, value)
+            
+            # Create email message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = f"{self.from_name} <{self.from_email}>"
+            msg['To'] = to_email
+            
+            # If no text content provided, create basic text version from HTML
+            if not text_content:
+                import re
+                text_content = re.sub(r'<[^>]+>', '', html_content)
+            
+            text_part = MIMEText(text_content, 'plain')
+            html_part = MIMEText(html_content, 'html')
+            
+            msg.attach(text_part)
+            msg.attach(html_part)
+            
+            # Send email
+            server = await self._create_smtp_connection()
+            try:
+                await server.send_message(msg)
+                print(f"[SUCCESS] Affiliate template email sent successfully to {to_email}")
+                return True
+            finally:
+                await server.quit()
+        
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            return False
+        except Exception as e:
+            print(f"ERROR: Failed to send affiliate template email to {to_email}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 # Global email service instance
 email_service = EmailService()
