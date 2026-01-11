@@ -543,27 +543,31 @@ async def get_affiliate_status(credentials: HTTPAuthorizationCredentials = Depen
             }
 
 
-@router.post("/affiliate/send-email", response_model=schemas.CustomEmailResponse)
-async def send_custom_email_to_referral(
-    email_data: schemas.CustomEmailRequest,
+# ==================== Affiliate Email Template Endpoints ====================
+
+@router.post("/affiliate/email-template", response_model=schemas.EmailTemplateResponse)
+async def create_email_template(
+    template_data: schemas.EmailTemplateCreate,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     """
-    Send custom email to a referral
+    Create or update affiliate's email template for new member welcome emails.
     
-    This endpoint allows affiliates to send customized emails to their referrals.
-    You can use HTML in the message field for rich formatting.
+    This template will be automatically sent to new members who register through your unique link.
+    You can use template variables in your content:
+    - {member_name} - New member's full name
+    - {member_email} - New member's email
+    - {affiliate_name} - Your name
+    - {affiliate_email} - Your email
+    - {unique_link} - Your referral link
+    - {registration_date} - Date of registration
     """
-    from datetime import datetime
-    from beanie import PydanticObjectId
-    from email_service import email_service
-    
     current_user = await auth.get_current_user(credentials.credentials)
     
     if current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin users cannot send emails to referrals"
+            detail="Admin users cannot create email templates"
         )
     
     # Get the affiliate profile
@@ -574,52 +578,111 @@ async def send_custom_email_to_referral(
             detail="Affiliate profile not found"
         )
     
-    # Find the referral
-    try:
-        referral = await models.Referral.find_one(
-            models.Referral.id == PydanticObjectId(email_data.referral_id)
-        )
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid referral ID format"
-        )
+    # Create or update the template
+    template = await crud.create_affiliate_email_template(str(affiliate.id), template_data)
     
-    if not referral:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Referral not found"
-        )
+    return template
+
+
+@router.get("/affiliate/email-template", response_model=schemas.EmailTemplateResponse)
+async def get_email_template(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Get current affiliate's email template"""
+    current_user = await auth.get_current_user(credentials.credentials)
     
-    # Verify the referral belongs to this affiliate
-    if str(referral.affiliate_id) != str(affiliate.id):
+    if current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only send emails to your own referrals"
+            detail="Admin users don't have email templates"
         )
     
-    # Send the custom email
-    email_sent = await email_service.send_custom_email(
-        to_email=referral.email,
-        subject=email_data.subject,
-        message=email_data.message,
-        recipient_name=referral.full_name
-    )
-    
-    if not email_sent:
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to send email. Please check email service configuration."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
         )
     
-    return schemas.CustomEmailResponse(
-        message="Email sent successfully",
-        referral_email=referral.email,
-        referral_name=referral.full_name,
-        sent_at=datetime.utcnow()
-    )
+    # Get the template
+    template = await crud.get_affiliate_email_template(str(affiliate.id))
+    
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email template not found. Create one using POST /affiliate/email-template"
+        )
+    
+    return template
 
 
+@router.patch("/affiliate/email-template", response_model=schemas.EmailTemplateResponse)
+async def update_email_template(
+    template_data: schemas.EmailTemplateUpdate,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Update affiliate's email template"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot update email templates"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Update the template
+    template = await crud.update_affiliate_email_template(str(affiliate.id), template_data)
+    
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email template not found. Create one first using POST /affiliate/email-template"
+        )
+    
+    return template
 
 
+@router.delete("/affiliate/email-template")
+async def delete_email_template(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """Delete affiliate's email template (will revert to default welcome email)"""
+    current_user = await auth.get_current_user(credentials.credentials)
+    
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users cannot delete email templates"
+        )
+    
+    # Get the affiliate profile
+    affiliate = await crud.get_affiliate_by_user(current_user.id)
+    if not affiliate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Affiliate profile not found"
+        )
+    
+    # Delete the template
+    result = await crud.delete_affiliate_email_template(str(affiliate.id))
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email template not found"
+        )
+    
+    return {
+        "message": "Email template deleted successfully. New members will receive default welcome email.",
+        "affiliate_id": str(affiliate.id)
+    }
 

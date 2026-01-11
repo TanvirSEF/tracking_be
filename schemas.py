@@ -382,3 +382,41 @@ class CustomEmailResponse(BaseModel):
     referral_email: str
     referral_name: str
     sent_at: datetime
+
+# ==================== Affiliate Email Template Schemas ====================
+
+class EmailTemplateCreate(BaseModel):
+    """Schema for creating an affiliate email template"""
+    subject: str = Field(..., min_length=1, max_length=200, description="Email subject line")
+    html_content: str = Field(..., min_length=1, max_length=10000, description="HTML email body (supports template variables)")
+    text_content: Optional[str] = Field(None, max_length=10000, description="Plain text fallback (optional)")
+    is_active: bool = Field(default=True, description="Enable/disable template")
+    
+    @validator('subject', 'html_content', 'text_content')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class EmailTemplateUpdate(BaseModel):
+    """Schema for updating an affiliate email template"""
+    subject: Optional[str] = Field(None, min_length=1, max_length=200, description="Email subject line")
+    html_content: Optional[str] = Field(None, min_length=1, max_length=10000, description="HTML email body")
+    text_content: Optional[str] = Field(None, max_length=10000, description="Plain text fallback")
+    is_active: Optional[bool] = Field(None, description="Enable/disable template")
+    
+    @validator('subject', 'html_content', 'text_content')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class EmailTemplateResponse(BaseModel):
+    """Schema for email template response"""
+    id: str
+    affiliate_id: str
+    subject: str
+    html_content: str
+    text_content: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

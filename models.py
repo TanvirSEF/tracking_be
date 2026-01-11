@@ -112,6 +112,20 @@ class AffiliateNote(Document):
     class Settings:
         name = "affiliate_notes"
 
+class AffiliateEmailTemplate(Document):
+    """Email template that affiliates can customize for new member welcome emails"""
+    affiliate_id: PydanticObjectId = Field(..., unique=True, index=True)  # One template per affiliate
+    subject: str = Field(..., min_length=1, max_length=200)
+    html_content: str = Field(..., min_length=1, max_length=10000)  # HTML email body
+    text_content: Optional[str] = Field(None, max_length=10000)  # Plain text fallback
+    is_active: bool = Field(default=True)  # Enable/disable template
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Settings:
+        name = "affiliate_email_templates"
+
+
 class SystemConfig(Document):
     admin_registration_link: str = Field(..., unique=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
