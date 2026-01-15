@@ -6,7 +6,7 @@ import models
 import crud
 from database import init_db, database_initialized
 from config import settings
-from routers import auth as auth_router, admin, affiliate, referral, tickets
+from routers import auth as auth_router, admin, affiliate, referral, tickets, public_notes, tutorials
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,6 +62,8 @@ app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 app.include_router(affiliate.router, tags=["Affiliate"])
 app.include_router(referral.router, tags=["Referral"])
 app.include_router(tickets.router, tags=["Support Tickets"])
+app.include_router(public_notes.router, tags=["Public Notes"])
+app.include_router(tutorials.router, tags=["Tutorial Videos"])
 
 # Root endpoint
 @app.get("/")

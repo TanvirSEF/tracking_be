@@ -420,3 +420,73 @@ class EmailTemplateResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ==================== Public Notes Schemas ====================
+
+class PublicNoteCreate(BaseModel):
+    """Schema for creating a public note/announcement"""
+    title: str = Field(..., min_length=1, max_length=200, description="Note title")
+    content: str = Field(..., min_length=1, max_length=10000, description="Note content")
+    is_published: bool = Field(default=True, description="Publish immediately or save as draft")
+    
+    @validator('title', 'content')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class PublicNoteUpdate(BaseModel):
+    """Schema for updating a public note"""
+    title: Optional[str] = Field(None, min_length=1, max_length=200, description="Note title")
+    content: Optional[str] = Field(None, min_length=1, max_length=10000, description="Note content")
+    is_published: Optional[bool] = Field(None, description="Publish or unpublish")
+    
+    @validator('title', 'content')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class PublicNoteResponse(BaseModel):
+    """Schema for public note response"""
+    id: str
+    title: str
+    content: str
+    author_id: str
+    author_email: str
+    is_published: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ==================== Tutorial Video Schemas ====================
+
+class TutorialVideoUpdate(BaseModel):
+    """Schema for updating tutorial video metadata"""
+    title: Optional[str] = Field(None, min_length=1, max_length=200, description="Video title")
+    description: Optional[str] = Field(None, min_length=1, max_length=2000, description="Video description")
+    is_published: Optional[bool] = Field(None, description="Publish or unpublish video")
+    
+    @validator('title', 'description')
+    def strip_whitespace(cls, v):
+        return v.strip() if v else v
+
+class TutorialVideoResponse(BaseModel):
+    """Schema for tutorial video response"""
+    id: str
+    title: str
+    description: str
+    video_url: str
+    cloudinary_public_id: str
+    thumbnail_url: Optional[str] = None
+    duration: Optional[int] = None  # Duration in seconds
+    video_format: Optional[str] = "mp4"
+    file_size: Optional[int] = None  # Size in bytes
+    author_id: str
+    author_email: str
+    is_published: bool
+    view_count: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
