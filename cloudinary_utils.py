@@ -227,3 +227,164 @@ async def delete_cloudinary_image(image_url: str) -> bool:
     
     return False
 
+# ==================== Tutorial Video Upload Functions ====================
+
+async def upload_tutorial_video(file: UploadFile) -> dict:
+    """
+    Upload tutorial video to Cloudinary with professional settings
+    
+    Args:
+        file: UploadFile object from FastAPI
+        
+    Returns:
+        dict: {
+            'video_url': str,  # Cloudinary secure URL
+            'public_id': str,  # For deletion
+            'thumbnail_url': str,  # Auto-generated thumbnail
+            'duration': int,  # Video duration in seconds
+            'format': str,  # Video format
+            'size': int  # File size in bytes
+        }
+        
+    Raises:
+        HTTPException: If validation fails or upload fails
+    """
+    # Check if Cloudinary is configured
+    if not configure_cloudinary():
+        raise HTTPException(
+            status_code=500,
+            detail="Cloudinary not configured. Please add CLOUDINARY credentials to .env file"
+        )
+    
+    # Validate file type - support common video formats
+    allowed_types = [
+        "video/mp4", 
+        "video/mpeg", 
+        "video/quicktime",  # .mov
+        "video/x-msvideo",  # .avi
+        "video/x-ms-wmv",  # .wmv
+        "video/webm"
+    ]
+    
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type '{file.content_type}'. Supported formats: MP4, MPEG, MOV, AVI, WMV, WEBM"
+        )
+    
+    # Read file contents
+    contents = await file.read()
+    file_size = len(contents)
+    
+    # Validate file size (max 100MB for videos)
+    max_size = 100 * 1024 * 1024  # 100MB in bytes
+    if file_size > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large ({file_size / (1024*1024):.2f}MB). Maximum size is 100MB"
+        )
+    
+    # Validate file is not empty
+    if file_size == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="File is empty"
+        )
+    
+    try:
+        # Generate unique filename
+        unique_filename = f"tutorial_{uuid.uuid4().hex}"
+        
+        # Upload to Cloudinary with video optimizations
+        result = cloudinary.uploader.upload(
+            contents,
+            folder="tutorials",  # Organize in tutorials folder
+            public_id=unique_filename,
+            resource_type="video",  # Important: specify video resource type
+            quality="auto",  # Auto-optimize quality
+            format="mp4",  # Convert to MP4 for compatibility
+            transformation=[
+                {
+                    "quality": "auto:good",  # Good quality with auto optimization
+                    "fetch_format": "auto"  # Auto format selection
+                }
+            ],
+            eager=[
+                {
+                    "width": 1280,
+                    "height": 720,
+                    "crop": "limit",  # HD quality, limit to 720p
+                    "quality": "auto:good"
+                }
+            ],
+            eager_async=True,  # Generate transformations asynchronously
+            overwrite=False,
+            unique_filename=True
+        )
+        
+        # Extract video metadata
+        video_url = result.get('secure_url')
+        public_id = result.get('public_id')
+        duration = result.get('duration', 0)  # Duration in seconds
+        video_format = result.get('format', 'mp4')
+        
+        # Generate thumbnail URL (Cloudinary auto-generates thumbnails for videos)
+        # Get thumbnail at 1 second mark
+        thumbnail_url = cloudinary.CloudinaryImage(public_id).build_url(
+            resource_type="video",
+            format="jpg",
+            transformation=[
+                {"width": 640, "height": 360, "crop": "fill"},
+                {"start_offset": "1"}  # Thumbnail at 1 second
+            ]
+        )
+        
+        return {
+            'video_url': video_url,
+            'public_id': public_id,
+            'thumbnail_url': thumbnail_url,
+            'duration': int(duration) if duration else 0,
+            'format': video_format,
+            'size': file_size
+        }
+    
+    except cloudinary.exceptions.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Cloudinary upload failed: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload video: {str(e)}"
+        )
+
+
+async def delete_cloudinary_video(public_id: str) -> bool:
+    """
+    Delete video from Cloudinary
+    
+    Args:
+        public_id: Cloudinary public_id of the video
+        
+    Returns:
+        bool: True if deleted successfully, False otherwise
+    """
+    if not configure_cloudinary():
+        print("Warning: Cloudinary not configured, cannot delete video")
+        return False
+    
+    try:
+        # Delete from Cloudinary with video resource type
+        result = cloudinary.uploader.destroy(public_id, resource_type="video")
+        
+        if result.get('result') == 'ok':
+            print(f"Successfully deleted video: {public_id}")
+            return True
+        else:
+            print(f"Failed to delete video: {result}")
+            return False
+    except Exception as e:
+        print(f"Error deleting video from Cloudinary: {e}")
+        return False
+

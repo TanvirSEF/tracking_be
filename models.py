@@ -182,3 +182,36 @@ class TicketReply(Document):
     
     class Settings:
         name = "ticket_replies"
+
+class PublicNote(Document):
+    """Public announcements/notes that admins can post and anyone can read"""
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=10000)
+    author_id: PydanticObjectId = Field(..., index=True)  # Admin who created it
+    author_email: str
+    is_published: bool = Field(default=True)  # Can be used to hide notes without deleting
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Settings:
+        name = "public_notes"
+
+class TutorialVideo(Document):
+    """Tutorial videos that admins can upload and anyone can watch"""
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(..., min_length=1, max_length=2000)
+    video_url: str  # Cloudinary secure URL
+    cloudinary_public_id: str  # For deletion from Cloudinary
+    thumbnail_url: Optional[str] = None  # Auto-generated video thumbnail
+    duration: Optional[int] = None  # Video duration in seconds
+    video_format: Optional[str] = "mp4"  # Video format
+    file_size: Optional[int] = None  # File size in bytes
+    author_id: PydanticObjectId = Field(..., index=True)  # Admin who uploaded
+    author_email: str
+    is_published: bool = Field(default=True)  # Publish or keep as draft
+    view_count: int = Field(default=0)  # Track video views
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Settings:
+        name = "tutorial_videos"

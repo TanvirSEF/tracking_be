@@ -1521,3 +1521,332 @@ async def delete_affiliate_email_template(affiliate_id: str):
     
     await template.delete()
     return True
+
+# ==================== Public Notes CRUD Functions ====================
+
+async def create_public_note(admin_id: str, admin_email: str, note_data: schemas.PublicNoteCreate):
+    """Create a new public note/announcement"""
+    from beanie import PydanticObjectId
+    
+    note = models.PublicNote(
+        title=note_data.title,
+        content=note_data.content,
+        author_id=PydanticObjectId(admin_id),
+        author_email=admin_email,
+        is_published=note_data.is_published,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+    await note.insert()
+    
+    return schemas.PublicNoteResponse(
+        id=str(note.id),
+        title=note.title,
+        content=note.content,
+        author_id=str(note.author_id),
+        author_email=note.author_email,
+        is_published=note.is_published,
+        created_at=note.created_at,
+        updated_at=note.updated_at
+    )
+
+async def get_all_public_notes(page: int = 1, page_size: int = 20, include_unpublished: bool = False):
+    """Get all public notes (paginated)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+    
+    # Build query - only published notes for public, all for admin
+    if include_unpublished:
+        query = models.PublicNote.find()
+    else:
+        query = models.PublicNote.find(models.PublicNote.is_published == True)
+    
+    notes = await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    result = []
+    for note in notes:
+        result.append(schemas.PublicNoteResponse(
+            id=str(note.id),
+            title=note.title,
+            content=note.content,
+            author_id=str(note.author_id),
+            author_email=note.author_email,
+            is_published=note.is_published,
+            created_at=note.created_at,
+            updated_at=note.updated_at
+        ))
+    return result
+
+async def get_public_note_by_id(note_id: str):
+    """Get a specific public note by ID"""
+    from beanie import PydanticObjectId
+    
+    try:
+        note = await models.PublicNote.find_one(
+            models.PublicNote.id == PydanticObjectId(note_id)
+        )
+    except Exception:
+        return None
+    
+    if not note:
+        return None
+    
+    return schemas.PublicNoteResponse(
+        id=str(note.id),
+        title=note.title,
+        content=note.content,
+        author_id=str(note.author_id),
+        author_email=note.author_email,
+        is_published=note.is_published,
+        created_at=note.created_at,
+        updated_at=note.updated_at
+    )
+
+async def update_public_note(note_id: str, update_data: schemas.PublicNoteUpdate):
+    """Update a public note"""
+    from beanie import PydanticObjectId
+    
+    try:
+        note = await models.PublicNote.find_one(
+            models.PublicNote.id == PydanticObjectId(note_id)
+        )
+    except Exception:
+        return None
+    
+    if not note:
+        return None
+    
+    # Update only provided fields
+    update_dict = update_data.dict(exclude_unset=True)
+    
+    for field, value in update_dict.items():
+        setattr(note, field, value)
+    
+    note.updated_at = datetime.utcnow()
+    await note.save()
+    
+    return schemas.PublicNoteResponse(
+        id=str(note.id),
+        title=note.title,
+        content=note.content,
+        author_id=str(note.author_id),
+        author_email=note.author_email,
+        is_published=note.is_published,
+        created_at=note.created_at,
+        updated_at=note.updated_at
+    )
+
+async def delete_public_note(note_id: str):
+    """Delete a public note"""
+    from beanie import PydanticObjectId
+    
+    try:
+        note = await models.PublicNote.find_one(
+            models.PublicNote.id == PydanticObjectId(note_id)
+        )
+    except Exception:
+        return None
+    
+    if not note:
+        return None
+    
+    await note.delete()
+    return True
+
+# ==================== Tutorial Video CRUD Functions ====================
+
+async def create_tutorial_video(
+    admin_id: str,
+    admin_email: str,
+    title: str,
+    description: str,
+    video_data: dict  # From Cloudinary upload
+):
+    """Create a new tutorial video"""
+    from beanie import PydanticObjectId
+    
+    video = models.TutorialVideo(
+        title=title,
+        description=description,
+        video_url=video_data['video_url'],
+        cloudinary_public_id=video_data['public_id'],
+        thumbnail_url=video_data.get('thumbnail_url'),
+        duration=video_data.get('duration'),
+        video_format=video_data.get('format', 'mp4'),
+        file_size=video_data.get('size'),
+        author_id=PydanticObjectId(admin_id),
+        author_email=admin_email,
+        is_published=True,
+        view_count=0,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+    await video.insert()
+    
+    return schemas.TutorialVideoResponse(
+        id=str(video.id),
+        title=video.title,
+        description=video.description,
+        video_url=video.video_url,
+        cloudinary_public_id=video.cloudinary_public_id,
+        thumbnail_url=video.thumbnail_url,
+        duration=video.duration,
+        video_format=video.video_format,
+        file_size=video.file_size,
+        author_id=str(video.author_id),
+        author_email=video.author_email,
+        is_published=video.is_published,
+        view_count=video.view_count,
+        created_at=video.created_at,
+        updated_at=video.updated_at
+    )
+
+async def get_all_tutorial_videos(page: int = 1, page_size: int = 20, include_unpublished: bool = False):
+    """Get all tutorial videos (paginated)"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    skip = (page - 1) * page_size
+    
+    # Build query - only published videos for public, all for admin
+    if include_unpublished:
+        query = models.TutorialVideo.find()
+    else:
+        query = models.TutorialVideo.find(models.TutorialVideo.is_published == True)
+    
+    videos = await query.sort("-created_at").skip(skip).limit(page_size).to_list()
+    
+    result = []
+    for video in videos:
+        result.append(schemas.TutorialVideoResponse(
+            id=str(video.id),
+            title=video.title,
+            description=video.description,
+            video_url=video.video_url,
+            cloudinary_public_id=video.cloudinary_public_id,
+            thumbnail_url=video.thumbnail_url,
+            duration=video.duration,
+            video_format=video.video_format,
+            file_size=video.file_size,
+            author_id=str(video.author_id),
+            author_email=video.author_email,
+            is_published=video.is_published,
+            view_count=video.view_count,
+            created_at=video.created_at,
+            updated_at=video.updated_at
+        ))
+    return result
+
+async def get_tutorial_video_by_id(video_id: str, increment_view: bool = False):
+    """Get a specific tutorial video by ID"""
+    from beanie import PydanticObjectId
+    
+    try:
+        video = await models.TutorialVideo.find_one(
+            models.TutorialVideo.id == PydanticObjectId(video_id)
+        )
+    except Exception:
+        return None
+    
+    if not video:
+        return None
+    
+    # Increment view count if requested (for public viewing)
+    if increment_view:
+        video.view_count += 1
+        await video.save()
+    
+    return schemas.TutorialVideoResponse(
+        id=str(video.id),
+        title=video.title,
+        description=video.description,
+        video_url=video.video_url,
+        cloudinary_public_id=video.cloudinary_public_id,
+        thumbnail_url=video.thumbnail_url,
+        duration=video.duration,
+        video_format=video.video_format,
+        file_size=video.file_size,
+        author_id=str(video.author_id),
+        author_email=video.author_email,
+        is_published=video.is_published,
+        view_count=video.view_count,
+        created_at=video.created_at,
+        updated_at=video.updated_at
+    )
+
+async def update_tutorial_video(video_id: str, update_data: schemas.TutorialVideoUpdate):
+    """Update a tutorial video metadata"""
+    from beanie import PydanticObjectId
+    
+    try:
+        video = await models.TutorialVideo.find_one(
+            models.TutorialVideo.id == PydanticObjectId(video_id)
+        )
+    except Exception:
+        return None
+    
+    if not video:
+        return None
+    
+    # Update only provided fields
+    update_dict = update_data.dict(exclude_unset=True)
+    
+    for field, value in update_dict.items():
+        setattr(video, field, value)
+    
+    video.updated_at = datetime.utcnow()
+    await video.save()
+    
+    return schemas.TutorialVideoResponse(
+        id=str(video.id),
+        title=video.title,
+        description=video.description,
+        video_url=video.video_url,
+        cloudinary_public_id=video.cloudinary_public_id,
+        thumbnail_url=video.thumbnail_url,
+        duration=video.duration,
+        video_format=video.video_format,
+        file_size=video.file_size,
+        author_id=str(video.author_id),
+        author_email=video.author_email,
+        is_published=video.is_published,
+        view_count=video.view_count,
+        created_at=video.created_at,
+        updated_at=video.updated_at
+    )
+
+async def delete_tutorial_video(video_id: str):
+    """Delete a tutorial video and remove from Cloudinary"""
+    from beanie import PydanticObjectId
+    import cloudinary_utils
+    
+    try:
+        video = await models.TutorialVideo.find_one(
+            models.TutorialVideo.id == PydanticObjectId(video_id)
+        )
+    except Exception:
+        return None
+    
+    if not video:
+        return None
+    
+    # Delete video from Cloudinary
+    try:
+        await cloudinary_utils.delete_cloudinary_video(video.cloudinary_public_id)
+        print(f"Deleted video from Cloudinary: {video.cloudinary_public_id}")
+    except Exception as e:
+        print(f"Warning: Failed to delete video from Cloudinary: {e}")
+        # Continue with database deletion even if Cloudinary deletion fails
+    
+    # Delete from database
+    await video.delete()
+    return True
+
