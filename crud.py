@@ -701,11 +701,21 @@ async def get_affiliate_by_referral(referral_id: PydanticObjectId):
 
 # Password reset functions
 async def request_password_reset(email: str):
-    """Request password reset for a user"""
-    # Check if user exists
+    """Request password reset for a user (supports both User and Referral/Member)"""
+    # Check if user exists in User collection (affiliate/admin)
     user = await models.User.find_one(models.User.email == email)
+    
+    # If not found in User, check Referral/Member collection
     if not user:
-        return None  # Don't reveal if user exists or not for security
+        referral = await models.Referral.find_one(models.Referral.email == email)
+        if not referral:
+            return None  # Don't reveal if email exists or not for security
+    
+    # Invalidate any existing password reset tokens for this email
+    await models.EmailVerificationToken.find(
+        models.EmailVerificationToken.email == email,
+        models.EmailVerificationToken.token_type == "password_reset"
+    ).delete()
     
     # Create password reset token
     from auth_utils import create_password_reset_token, send_password_reset_email
@@ -724,7 +734,7 @@ async def request_password_reset(email: str):
     }
 
 async def reset_password_with_token(token: str, new_password: str):
-    """Reset password using token"""
+    """Reset password using token (supports both User and Referral/Member)"""
     from auth_utils import verify_password_reset_token, mark_password_reset_token_as_used, get_password_hash
     
     # Verify token
@@ -732,30 +742,38 @@ async def reset_password_with_token(token: str, new_password: str):
     if not token_record:
         return None
     
-    # Find user by email
+    # Find user by email - check User collection first (affiliate/admin)
     user = await models.User.find_one(models.User.email == token_record.email)
-    if not user:
-        return None
-    
-    # Update password
-    user.hashed_password = get_password_hash(new_password)
-    await user.save()
+    if user:
+        user.hashed_password = get_password_hash(new_password)
+        await user.save()
+    else:
+        # Check Referral/Member collection
+        referral = await models.Referral.find_one(models.Referral.email == token_record.email)
+        if not referral:
+            return None
+        referral.hashed_password = get_password_hash(new_password)
+        await referral.save()
     
     # Mark token as used
     await mark_password_reset_token_as_used(token_record)
     
     return {
-        "email": user.email,
+        "email": token_record.email,
         "password_reset": True,
         "reset_at": datetime.utcnow()
     }
 
 async def resend_password_reset_email(email: str):
-    """Resend password reset email"""
-    # Check if user exists
+    """Resend password reset email (supports both User and Referral/Member)"""
+    # Check if user exists in User collection (affiliate/admin)
     user = await models.User.find_one(models.User.email == email)
+    
+    # If not found, check Referral/Member collection
     if not user:
-        return None  # Don't reveal if user exists or not for security
+        referral = await models.Referral.find_one(models.Referral.email == email)
+        if not referral:
+            return None  # Don't reveal if email exists or not for security
     
     # Create new password reset token (invalidate old ones)
     from auth_utils import create_password_reset_token, send_password_reset_email
